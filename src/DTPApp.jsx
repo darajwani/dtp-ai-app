@@ -24,7 +24,23 @@ export default function DTPApp() {
         </>
       )}
 
-      {stage === 'artifact' && <OrangeStageArtifact />}
+      {stage === 'artifact' && (
+        <>
+          <OrangeStageArtifact />
+          <div className="text-right mt-4">
+            <button
+              onClick={() => setStage('radiograph')}
+              className="bg-green-600 text-white px-4 py-2 rounded"
+            >
+              Proceed to Green Sheet Stage
+            </button>
+          </div>
+        </>
+      )}
+
+      {stage === 'radiograph' && (
+        <GreenStageRadiograph onNext={() => setStage('verbal')} />
+      )}
     </div>
   )
 }
