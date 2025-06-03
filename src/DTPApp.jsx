@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import HistoryInterview from './components/HistoryInterview'
 import OrangeStageArtifact from './components/OrangeStageArtifact'
+import GreenStageRadiograph from './components/GreenStageRadiograph'
 
 export default function DTPApp() {
   const [stage, setStage] = useState('history')
