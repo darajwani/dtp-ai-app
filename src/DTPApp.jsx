@@ -2,7 +2,7 @@ import { useState } from 'react'
 import HistoryInterview from './components/HistoryInterview'
 import OrangeStageArtifact from './components/OrangeStageArtifact'
 import GreenStageRadiograph from './components/GreenStageRadiograph'
-import VerbalStage from './components/VerbalStage'
+import VerbalStage from './components/VerbalStage';
 
 export default function DTPApp() {
   const [stage, setStage] = useState('history')
@@ -40,8 +40,20 @@ export default function DTPApp() {
       )}
 
       {stage === 'radiograph' && (
-        <GreenStageRadiograph onNext={() => setStage('verbal')} />
+        <>
+          <GreenStageRadiograph />
+          <div className="text-right mt-4">
+            <button
+              onClick={() => setStage('verbal')}
+              className="bg-yellow-600 text-white px-4 py-2 rounded"
+            >
+              Proceed to Verbal Stage
+            </button>
+          </div>
+        </>
       )}
+
+      {stage === 'verbal' && <VerbalStage />}
     </div>
   )
 }
