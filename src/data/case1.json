@@ -6,5 +6,10 @@
     "pain": "No real pain, just discomfort when chewing.",
     "medical": "I have high blood pressure and take amlodipine.",
     "smoking": "I quit smoking 2 years ago. I used to smoke a pack a day."
-  }
+  },
+  "extraoralExam": "Swelling in relation to the lower right side. Normal eyes, nose, skin, lips. Tenderness on right masseter.",
+  "intraoralExam": "BPE score: 2 in all sextants. Occlusion: Normal.",
+  "bpeScore": "2 | 2 | 2 - 2 | 2 | 2",
+  "extraoralPhoto": "/images/extraoral-placeholder.jpg",
+  "intraoralPhoto": "/images/intraoral-placeholder.jpg"
 }
