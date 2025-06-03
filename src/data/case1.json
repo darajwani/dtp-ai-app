@@ -11,7 +11,6 @@
   "intraoralExam": "BPE score: 2 in all sextants. Occlusion: Normal.",
   "bpeScore": "2 | 2 | 2 - 2 | 2 | 2",
   "extraoralPhoto": "/images/extraoral-placeholder.jpg",
-  "intraoralPhoto": "/images/intraoral-placeholder.jpg"
+  "intraoralPhoto": "/images/intraoral-placeholder.jpg",
   "radiographUrl": "/images/sample-radiograph.jpg"
-
 }
