@@ -29,7 +29,7 @@ export default function HistoryInterview() {
     <div>
       <div className="bg-gray-100 p-4 rounded shadow max-h-[300px] overflow-y-auto mb-4">
         {messages.map((msg, idx) => (
-          <div key={idx} className={\`mb-2 \${msg.from === 'ai' ? 'text-blue-600' : 'text-black'}\`}>
+          <div key={idx} className={`${msg.from === 'ai' ? 'text-blue-600' : 'text-black'} mb-2`}>
             <strong>{msg.from === 'ai' ? 'Patient:' : 'You:'}</strong> {msg.text}
           </div>
         ))}
