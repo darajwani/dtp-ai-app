@@ -12,4 +12,6 @@
   "bpeScore": "2 | 2 | 2 - 2 | 2 | 2",
   "extraoralPhoto": "/images/extraoral-placeholder.jpg",
   "intraoralPhoto": "/images/intraoral-placeholder.jpg"
+  "radiographUrl": "/images/sample-radiograph.jpg"
+
 }
