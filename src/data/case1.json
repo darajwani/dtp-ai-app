@@ -1,0 +1,10 @@
+{
+  "caseId": "DTP001",
+  "initialPrompt": "Hello, I'm here for a check-up. My lower denture has been bothering me.",
+  "responses": {
+    "denture": "Yes, it's quite loose. I got it about 5 years ago.",
+    "pain": "No real pain, just discomfort when chewing.",
+    "medical": "I have high blood pressure and take amlodipine.",
+    "smoking": "I quit smoking 2 years ago. I used to smoke a pack a day."
+  }
+}
