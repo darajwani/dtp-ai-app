@@ -3,14 +3,12 @@ import { useEffect, useState } from 'react';
 
 export default function VerbalStage() {
   const [transcript, setTranscript] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [chunks, setChunks] = useState([]);
   const [lastSentTime, setLastSentTime] = useState(0);
+  const [micActive, setMicActive] = useState(false);
 
   useEffect(() => {
-    if (!isRecording) return;
-
     async function initRecording() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
@@ -25,14 +23,16 @@ export default function VerbalStage() {
       };
 
       recorder.start(3000); // collect small chunks every 3s
+      setMicActive(true);
 
       recorder.onstop = () => {
         stream.getTracks().forEach(t => t.stop());
+        setMicActive(false);
       };
     }
 
     initRecording();
-  }, [isRecording]);
+  }, []);
 
   useEffect(() => {
     if (!mediaRecorder) return;
@@ -72,16 +72,12 @@ export default function VerbalStage() {
     <div className="bg-yellow-100 min-h-screen p-6 space-y-6">
       <h2 className="text-2xl font-bold text-yellow-800">🟡 Stage 4 – Verbal Presentation</h2>
 
-      {!isRecording && (
-        <button
-          onClick={() => setIsRecording(true)}
-          className="bg-yellow-600 text-white px-6 py-2 rounded"
-        >
-          🎤 Start 10-Minute Continuous Recording
-        </button>
+      {micActive && (
+        <div className="flex items-center space-x-3">
+          <div className={`w-4 h-4 rounded-full ${micActive ? 'bg-red-500 animate-pulse' : 'bg-gray-300'}`}></div>
+          <p>🎙️ Voice is being monitored. Speak your treatment plan clearly.</p>
+        </div>
       )}
-
-      {isRecording && <p>🎙️ Recording is active. Speak your treatment plan to the patient. AI is listening…</p>}
 
       {transcript && (
         <div className="bg-white p-4 rounded shadow">
