@@ -60,7 +60,7 @@ export default function VerbalStage() {
     formData.append('file', blob, 'verbal-fragment.webm');
 
     try {
-      const res = await fetch('https://hook.eu2.make.com/gotjtejc6e7anjxxikz5fciwcl1m2nj2', {
+      const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
         method: 'POST',
         body: formData,
       });
