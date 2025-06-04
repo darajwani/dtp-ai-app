@@ -38,13 +38,27 @@ export default function VerbalStage() {
 
           recorder.start();
         },
-        onSpeechEnd: () => {
-          console.log("Speech ended");
-          setMicActive(false);
-          if (mediaRecorderRef.current?.state === 'recording') {
-            mediaRecorderRef.current.stop();
-          }
-        },
+    onSpeechEnd: () => {
+  console.log("Speech ended");
+  setMicActive(false);
+
+  if (mediaRecorderRef.current?.state === 'recording') {
+    mediaRecorderRef.current.onstop = () => {
+      const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
+      sendToTranscription(blob);
+
+      // ✅ Restart VAD recording
+      chunkBufferRef.current = [];
+      const newRecorder = new MediaRecorder(streamRef.current, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = newRecorder;
+      newRecorder.ondataavailable = e => e.data.size > 0 && chunkBufferRef.current.push(e.data);
+      newRecorder.start();
+    };
+
+    mediaRecorderRef.current.stop();
+  }
+}
+,
         modelURL: '/vad/silero_vad.onnx'
       });
 
