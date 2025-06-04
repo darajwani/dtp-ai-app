@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 
 export default function VerbalStage() {
   const [transcript, setTranscript] = useState('');
-  const [feedback, setFeedback] = useState('');
   const [micActive, setMicActive] = useState(false);
   const mediaRecorderRef = useRef(null);
   const chunkBufferRef = useRef([]);
@@ -19,29 +18,34 @@ export default function VerbalStage() {
 
       const myvad = await vad.MicVAD.new({
         onSpeechStart: () => {
+          console.log("Speech started");
           setMicActive(true);
           chunkBufferRef.current = [];
 
           const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
           mediaRecorderRef.current = recorder;
-          recorder.ondataavailable = (e) => {
+
+          recorder.ondataavailable = e => {
             if (e.data.size > 0) {
               chunkBufferRef.current.push(e.data);
             }
           };
+
           recorder.onstop = () => {
             const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-            sendToMakeWebhook(blob);
+            sendToTranscription(blob);
           };
+
           recorder.start();
         },
         onSpeechEnd: () => {
+          console.log("Speech ended");
           setMicActive(false);
           if (mediaRecorderRef.current?.state === 'recording') {
             mediaRecorderRef.current.stop();
           }
         },
-        modelURL: '/vad/silero_vad.onnx',
+        modelURL: '/vad/silero_vad.onnx'
       });
 
       myvad.start();
@@ -51,12 +55,12 @@ export default function VerbalStage() {
 
     return () => {
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
   }, []);
 
-  async function sendToMakeWebhook(blob) {
+  async function sendToTranscription(blob) {
     const formData = new FormData();
     formData.append('file', blob, 'verbal-fragment.webm');
 
@@ -68,18 +72,15 @@ export default function VerbalStage() {
 
       const json = await res.json();
 
-      // Update transcript
-      if (json.transcript) {
-        setTranscript((prev) => (prev ? prev + '\n' + json.transcript : json.transcript));
-      }
+      // ✅ Decode Base64 reply
+      const rawText = atob(json.reply);
+      const decodedText = new TextDecoder('utf-8').decode(
+        Uint8Array.from(rawText, c => c.charCodeAt(0))
+      ).trim();
 
-      // Decode base64 feedback
-      if (json.feedback) {
-        const decoded = atob(json.feedback);
-        setFeedback(decoded.trim());
-      }
+      setTranscript(prev => prev + '\n' + decodedText);
     } catch (err) {
-      console.error('Error during transcription/feedback:', err);
+      console.error('Transcription error:', err);
     }
   }
 
@@ -94,15 +95,8 @@ export default function VerbalStage() {
 
       {transcript && (
         <div className="bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-2">📝 Live Transcript</h3>
+          <h3 className="font-semibold mb-2">📝 AI Feedback</h3>
           <pre className="whitespace-pre-wrap text-gray-800">{transcript}</pre>
-        </div>
-      )}
-
-      {feedback && (
-        <div className="bg-white p-4 rounded shadow border border-yellow-300">
-          <h3 className="font-semibold mb-2 text-yellow-700">✅ AI Feedback</h3>
-          <p className="text-gray-800 whitespace-pre-wrap">{feedback}</p>
         </div>
       )}
     </div>
