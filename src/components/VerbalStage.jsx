@@ -12,7 +12,7 @@ export default function VerbalStage() {
 
   useEffect(() => {
     async function startVAD() {
-      const vad = window.vad;
+      const vad = window?.vad || window;
       if (!vad || !vad.MicVAD) return;
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
