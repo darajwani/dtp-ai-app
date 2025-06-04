@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 export default function VerbalStage() {
   const [micActive, setMicActive] = useState(false);
   const [recordingComplete, setRecordingComplete] = useState(false);
-  const [transcript, setTranscript] = useState('');
+  const [liveResponse, setLiveResponse] = useState('');
+  const [finalFeedback, setFinalFeedback] = useState('');
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
@@ -22,7 +23,6 @@ export default function VerbalStage() {
       vadRef.current = await vad.MicVAD.new({
         onSpeechStart: () => {
           if (recordingComplete) return;
-
           setMicActive(true);
 
           const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
@@ -34,8 +34,9 @@ export default function VerbalStage() {
           };
 
           recorder.onstop = () => {
-            const combinedBlob = new Blob(chunkList, { type: 'audio/webm' });
-            audioChunksRef.current.push(combinedBlob);
+            const blob = new Blob(chunkList, { type: 'audio/webm' });
+            audioChunksRef.current.push(blob);
+            sendToShortResponder(blob); // check if it's a question and reply
           };
 
           recorder.start();
@@ -54,7 +55,6 @@ export default function VerbalStage() {
 
       vadRef.current.start();
 
-      // ⏱ Automatically end session after 10 minutes
       timeoutRef.current = setTimeout(() => {
         endSession();
       }, 10 * 60 * 1000); // 10 minutes
@@ -75,10 +75,40 @@ export default function VerbalStage() {
     streamRef.current?.getTracks().forEach(t => t.stop());
 
     const finalBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-    sendToTranscription(finalBlob);
+    sendToFinalFeedback(finalBlob);
   };
 
-  async function sendToTranscription(blob) {
+  async function sendToShortResponder(blob) {
+    if (blob.size < 100000) return; // skip silent noise
+    const formData = new FormData();
+    formData.append('file', blob, 'short-question.webm');
+
+    try {
+      const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const json = await res.json();
+      if (!json.reply) return;
+
+      const base64 = json.reply;
+      if (!base64.trim()) return; // skip if no reply
+
+      const decodedText = new TextDecoder().decode(
+        Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+      ).trim();
+
+      if (decodedText.length <= 10) {
+        setLiveResponse(decodedText);
+        setTimeout(() => setLiveResponse(''), 4000);
+      }
+    } catch (err) {
+      console.error('Short reply error:', err);
+    }
+  }
+
+  async function sendToFinalFeedback(blob) {
     const formData = new FormData();
     formData.append('file', blob, 'full-session.webm');
 
@@ -94,9 +124,9 @@ export default function VerbalStage() {
         Uint8Array.from(atob(base64), c => c.charCodeAt(0))
       ).trim();
 
-      setTranscript(decodedText);
+      setFinalFeedback(decodedText);
     } catch (err) {
-      console.error('Transcription error:', err);
+      console.error('Final feedback error:', err);
     }
   }
 
@@ -106,13 +136,19 @@ export default function VerbalStage() {
 
       <div className="flex items-center space-x-3">
         <div className={`w-4 h-4 rounded-full ${micActive ? 'bg-red-500 animate-ping' : 'bg-gray-300'}`}></div>
-        <p>{micActive ? '🎙️ AI is listening to your presentation…' : recordingComplete ? 'Session complete. Generating feedback…' : 'Waiting for voice…'}</p>
+        <p>{micActive ? '🎙️ AI is listening…' : recordingComplete ? 'Session complete. Generating feedback…' : 'Waiting for voice…'}</p>
       </div>
 
-      {transcript && (
+      {liveResponse && (
+        <div className="bg-blue-50 p-3 rounded shadow text-blue-800 font-medium">
+          🤖 Patient says: {liveResponse}
+        </div>
+      )}
+
+      {finalFeedback && (
         <div className="bg-white p-4 rounded shadow mt-6">
-          <h3 className="font-semibold mb-2">✅ AI Feedback on Your DTP Presentation</h3>
-          <pre className="whitespace-pre-wrap text-gray-800">{transcript}</pre>
+          <h3 className="font-semibold mb-2">✅ Final AI Feedback</h3>
+          <pre className="whitespace-pre-wrap text-gray-800">{finalFeedback}</pre>
         </div>
       )}
     </div>
