@@ -4,8 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 export default function VerbalStage() {
   const [transcript, setTranscript] = useState('');
   const [micActive, setMicActive] = useState(false);
-  const [chunks, setChunks] = useState([]);
-  const [lastSentTime, setLastSentTime] = useState(0);
+  const [feedback, setFeedback] = useState('');
   const mediaRecorderRef = useRef(null);
   const chunkBufferRef = useRef([]);
   const streamRef = useRef(null);
@@ -68,9 +67,40 @@ export default function VerbalStage() {
       const json = await res.json();
       const rawText = atob(json.reply);
       const decodedText = new TextDecoder('utf-8').decode(Uint8Array.from(rawText, c => c.charCodeAt(0))).trim();
-      setTranscript(prev => prev + '\n' + decodedText);
+      const fullTranscript = transcript + '\n' + decodedText;
+      setTranscript(fullTranscript);
+      getGPTFeedback(fullTranscript); // ⬅️ Trigger feedback after each chunk
     } catch (err) {
       console.error('Transcription error:', err);
+    }
+  }
+
+  async function getGPTFeedback(text) {
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer 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',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: 'You are a dental OSCE examiner.' },
+            {
+              role: 'user',
+              content: `The student said:\n\n"${text}"\n\nPlease score this verbal DTP presentation from 0 to 10 and give short feedback.`
+            }
+          ]
+        })
+      });
+
+      const data = await res.json();
+      const reply = data.choices?.[0]?.message?.content || 'No feedback received.';
+      setFeedback(reply);
+    } catch (err) {
+      console.error('GPT feedback error:', err);
+      setFeedback('⚠️ Failed to retrieve feedback.');
     }
   }
 
@@ -87,6 +117,13 @@ export default function VerbalStage() {
         <div className="bg-white p-4 rounded shadow">
           <h3 className="font-semibold mb-2">📝 Live Transcript</h3>
           <pre className="whitespace-pre-wrap text-gray-800">{transcript}</pre>
+        </div>
+      )}
+
+      {feedback && (
+        <div className="bg-white p-4 rounded shadow border border-yellow-300">
+          <h3 className="font-semibold mb-2 text-yellow-700">✅ AI Feedback</h3>
+          <p className="text-gray-800 whitespace-pre-wrap">{feedback}</p>
         </div>
       )}
     </div>
