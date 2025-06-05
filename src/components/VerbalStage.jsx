@@ -1,4 +1,3 @@
-// src/components/VerbalStage.jsx
 import { useEffect, useRef, useState } from 'react';
 
 export default function VerbalStage() {
@@ -33,18 +32,19 @@ export default function VerbalStage() {
             chunkBufferRef.current = [];
 
             const recorder = new MediaRecorder(streamRef.current, {
-              mimeType: 'audio/webm;codecs=opus'
+              mimeType: 'audio/webm;codecs=opus',
             });
             mediaRecorderRef.current = recorder;
 
-            recorder.ondataavailable = e => {
+            recorder.ondataavailable = (e) => {
               if (e.data.size > 0) chunkBufferRef.current.push(e.data);
             };
 
             recorder.onstop = () => {
               console.log("🛑 Recorder stopped, sending...");
+              const isFinal = isRecordingFinalRef.current; // capture flag early
               const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-              sendToTranscription(blob, isRecordingFinalRef.current);
+              sendToTranscription(blob, isFinal);
             };
 
             recorder.start();
@@ -75,13 +75,14 @@ export default function VerbalStage() {
         await myvad.start();
         console.log("✅ VAD started");
 
+        // Final timeout trigger
         setTimeout(() => {
           console.log("⏱️ Time limit reached. Sending final audio...");
           isRecordingFinalRef.current = true;
           if (mediaRecorderRef.current?.state === 'recording') {
             mediaRecorderRef.current.stop();
           }
-        }, 10 * 60 * 1000);
+        }, 10 * 60 * 1000); // 10 minutes
 
       } catch (err) {
         console.error("❌ Error initializing VAD or mic:", err);
@@ -91,7 +92,7 @@ export default function VerbalStage() {
     startVAD();
 
     return () => {
-      streamRef.current?.getTracks().forEach(track => track.stop());
+      streamRef.current?.getTracks().forEach((track) => track.stop());
       myvad?.stop?.();
     };
   }, []);
@@ -117,10 +118,10 @@ export default function VerbalStage() {
       const json = JSON.parse(raw);
 
       const decodedText = new TextDecoder('utf-8').decode(
-        Uint8Array.from(atob(json.reply), c => c.charCodeAt(0))
+        Uint8Array.from(atob(json.reply), (c) => c.charCodeAt(0))
       ).trim();
 
-      setTranscript(prev => prev + '\n' + decodedText);
+      setTranscript((prev) => prev + '\n' + decodedText);
     } catch (err) {
       console.error('❌ Transcription fetch error:', err);
     }
