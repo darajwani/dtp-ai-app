@@ -61,7 +61,7 @@ export default function VerbalStage() {
           onFrameProcessed: (res) => {
             const now = Date.now();
             if (now - lastLogTimeRef.current > 1000) {
-              console.log("🧠 VAD frame (throttled):", res);
+              console.log("🧠 isSpeech:", res.isSpeech, "| notSpeech:", res.notSpeech);
               lastLogTimeRef.current = now;
             }
           },
@@ -107,16 +107,15 @@ export default function VerbalStage() {
         body: formData,
       });
 
-      const resClone = res.clone(); // Clone response for safe fallback
-      let json;
+      const raw = await res.text();
 
-      try {
-        json = await res.json();
-      } catch (err) {
-        const text = await resClone.text();
-        console.error("❌ Transcription response not JSON:", text);
+      // Only try JSON parse if it looks like JSON
+      if (!raw.trim().startsWith('{')) {
+        console.error("❌ Transcription response not JSON:", raw);
         return;
       }
+
+      const json = JSON.parse(raw);
 
       const decodedText = new TextDecoder('utf-8').decode(
         Uint8Array.from(atob(json.reply), c => c.charCodeAt(0))
@@ -124,7 +123,7 @@ export default function VerbalStage() {
 
       setTranscript(prev => prev + '\n' + decodedText);
     } catch (err) {
-      console.error('❌ Transcription error:', err);
+      console.error('❌ Transcription fetch error:', err);
     }
   }
 
@@ -141,20 +140,3 @@ export default function VerbalStage() {
         onClick={() => {
           console.log("🔘 Manual stop triggered");
           if (mediaRecorderRef.current?.state === 'recording') {
-            mediaRecorderRef.current.stop();
-          }
-        }}
-        className="bg-red-200 text-red-800 px-4 py-1 rounded"
-      >
-        ⏹️ Force Stop
-      </button>
-
-      {transcript && (
-        <div className="bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-2">📝 Transcript</h3>
-          <pre className="whitespace-pre-wrap text-gray-800">{transcript}</pre>
-        </div>
-      )}
-    </div>
-  );
-}
