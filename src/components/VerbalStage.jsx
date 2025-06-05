@@ -8,6 +8,7 @@ export default function VerbalStage() {
   const chunkBufferRef = useRef([]);
   const isRecordingFinalRef = useRef(false);
   const lastLogTimeRef = useRef(Date.now());
+  const triggerFinalTimeoutRef = useRef(null);
 
   useEffect(() => {
     let myvad;
@@ -45,7 +46,7 @@ export default function VerbalStage() {
               const isFinal = isRecordingFinalRef.current;
               const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
               sendToTranscription(blob, isFinal);
-              isRecordingFinalRef.current = false; // Reset immediately
+              isRecordingFinalRef.current = false;
             };
 
             recorder.start();
@@ -75,7 +76,6 @@ export default function VerbalStage() {
 
         await myvad.start();
         console.log("✅ VAD started");
-
       } catch (err) {
         console.error("❌ Error initializing VAD or mic:", err);
       }
@@ -86,8 +86,9 @@ export default function VerbalStage() {
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       myvad?.stop?.();
+      clearTimeout(triggerFinalTimeoutRef.current);
     };
-  }, [micActive]);
+  }, []);
 
   async function sendToTranscription(blob, isFinal = false) {
     const filename = isFinal ? 'verbal-final.webm' : 'verbal-fragment.webm';
@@ -144,31 +145,26 @@ export default function VerbalStage() {
           onClick={() => {
             console.log("✅ Send Final Triggered");
             isRecordingFinalRef.current = true;
-            if (mediaRecorderRef.current?.state === 'recording') {
-              mediaRecorderRef.current.stop();
-            } else {
-              // if not currently recording, start a dummy short recording to capture final
-              const stream = streamRef.current;
-              if (stream) {
-                chunkBufferRef.current = [];
-                const recorder = new MediaRecorder(stream, {
-                  mimeType: 'audio/webm;codecs=opus',
-                });
-                mediaRecorderRef.current = recorder;
+            chunkBufferRef.current = [];
+            const recorder = new MediaRecorder(streamRef.current, {
+              mimeType: 'audio/webm;codecs=opus',
+            });
+            mediaRecorderRef.current = recorder;
 
-                recorder.ondataavailable = (e) => {
-                  if (e.data.size > 0) chunkBufferRef.current.push(e.data);
-                };
+            recorder.ondataavailable = (e) => {
+              if (e.data.size > 0) chunkBufferRef.current.push(e.data);
+            };
 
-                recorder.onstop = () => {
-                  const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-                  sendToTranscription(blob, true);
-                };
+            recorder.onstop = () => {
+              console.log("🛑 Final recorder stopped, sending...");
+              const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
+              sendToTranscription(blob, true);
+            };
 
-                recorder.start();
-                setTimeout(() => recorder.stop(), 1000); // 1 sec dummy to trigger final route
-              }
-            }
+            recorder.start();
+            setTimeout(() => {
+              if (recorder.state === 'recording') recorder.stop();
+            }, 1000); // 1 sec burst for final
           }}
           className="bg-green-200 text-green-800 px-4 py-1 rounded"
         >
