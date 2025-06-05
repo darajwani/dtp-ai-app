@@ -58,20 +58,19 @@ export default function VerbalStage() {
           },
 
           onFrameProcessed: (res) => {
-            const prob = res?.prob ?? res?.speech_prob ?? 'undefined';
-            console.log("🧠 VAD probability:", prob);
+            console.log("🧠 Full VAD frame result:", res);
           },
 
           modelURL: '/vad/silero_vad.onnx',
           throttleTime: 200,
-          positiveSpeechThreshold: 0.5, // more sensitive
+          positiveSpeechThreshold: 0.5,
           negativeSpeechThreshold: 0.3,
         });
 
         await myvad.start();
         console.log("✅ VAD started");
 
-        // Stop recording after 10 mins
+        // Auto stop after 10 mins
         setTimeout(() => {
           console.log("⏱️ Time limit reached. Sending final audio...");
           isRecordingFinalRef.current = true;
@@ -79,8 +78,9 @@ export default function VerbalStage() {
             mediaRecorderRef.current.stop();
           }
         }, 10 * 60 * 1000);
+
       } catch (err) {
-        console.error("❌ Error initializing mic or VAD:", err);
+        console.error("❌ Error initializing VAD or mic:", err);
       }
     }
 
@@ -103,12 +103,14 @@ export default function VerbalStage() {
         body: formData,
       });
 
+      const resClone = res.clone(); // ✅ For fallback
       let json;
+
       try {
         json = await res.json();
-      } catch (jsonErr) {
-        const fallbackText = await res.text();
-        console.error("❌ Transcription response was not JSON:", fallbackText);
+      } catch (err) {
+        const text = await resClone.text();
+        console.error("❌ Transcription response not JSON:", text);
         return;
       }
 
