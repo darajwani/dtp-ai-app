@@ -8,6 +8,7 @@ export default function VerbalStage() {
   const streamRef = useRef(null);
   const chunkBufferRef = useRef([]);
   const isRecordingFinalRef = useRef(false);
+  const lastLogTimeRef = useRef(Date.now());
 
   useEffect(() => {
     let myvad;
@@ -58,7 +59,11 @@ export default function VerbalStage() {
           },
 
           onFrameProcessed: (res) => {
-            console.log("🧠 Full VAD frame result:", res);
+            const now = Date.now();
+            if (now - lastLogTimeRef.current > 1000) {
+              console.log("🧠 VAD frame (throttled):", res);
+              lastLogTimeRef.current = now;
+            }
           },
 
           modelURL: '/vad/silero_vad.onnx',
@@ -70,7 +75,6 @@ export default function VerbalStage() {
         await myvad.start();
         console.log("✅ VAD started");
 
-        // Auto stop after 10 mins
         setTimeout(() => {
           console.log("⏱️ Time limit reached. Sending final audio...");
           isRecordingFinalRef.current = true;
@@ -103,7 +107,7 @@ export default function VerbalStage() {
         body: formData,
       });
 
-      const resClone = res.clone(); // ✅ For fallback
+      const resClone = res.clone(); // Clone response for safe fallback
       let json;
 
       try {
