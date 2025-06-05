@@ -109,7 +109,6 @@ export default function VerbalStage() {
 
       const raw = await res.text();
 
-      // Only try JSON parse if it looks like JSON
       if (!raw.trim().startsWith('{')) {
         console.error("❌ Transcription response not JSON:", raw);
         return;
@@ -140,3 +139,20 @@ export default function VerbalStage() {
         onClick={() => {
           console.log("🔘 Manual stop triggered");
           if (mediaRecorderRef.current?.state === 'recording') {
+            mediaRecorderRef.current.stop();
+          }
+        }}
+        className="bg-red-200 text-red-800 px-4 py-1 rounded"
+      >
+        ⏹️ Force Stop
+      </button>
+
+      {transcript && (
+        <div className="bg-white p-4 rounded shadow">
+          <h3 className="font-semibold mb-2">📝 Transcript</h3>
+          <pre className="whitespace-pre-wrap text-gray-800">{transcript}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
