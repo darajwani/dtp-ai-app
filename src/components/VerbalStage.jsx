@@ -10,6 +10,8 @@ export default function VerbalStage() {
   const isRecordingFinalRef = useRef(false);
 
   useEffect(() => {
+    let myvad;
+
     async function startVAD() {
       const vad = window?.vad || window;
       if (!vad || !vad.MicVAD) {
@@ -22,7 +24,7 @@ export default function VerbalStage() {
         console.log("✅ Microphone access granted");
         streamRef.current = stream;
 
-        const myvad = await vad.MicVAD.new({
+        myvad = await vad.MicVAD.new({
           onSpeechStart: () => {
             if (micActive) return;
             console.log("🎙️ Speech started");
@@ -55,10 +57,14 @@ export default function VerbalStage() {
             }
           },
 
+          onFrameProcessed: (res) => {
+            console.log("🧠 VAD probability:", res.speech_prob);
+          },
+
           modelURL: '/vad/silero_vad.onnx',
           throttleTime: 200,
-          positiveSpeechThreshold: 0.85,
-          negativeSpeechThreshold: 0.6,
+          positiveSpeechThreshold: 0.5, // more sensitive
+          negativeSpeechThreshold: 0.3,
         });
 
         await myvad.start();
@@ -71,10 +77,9 @@ export default function VerbalStage() {
           if (mediaRecorderRef.current?.state === 'recording') {
             mediaRecorderRef.current.stop();
           }
-        }, 10 * 60 * 1000); // 10 minutes
-
+        }, 10 * 60 * 1000);
       } catch (err) {
-        console.error("❌ Error initializing VAD or mic:", err);
+        console.error("❌ Error initializing mic or VAD:", err);
       }
     }
 
@@ -82,6 +87,7 @@ export default function VerbalStage() {
 
     return () => {
       streamRef.current?.getTracks().forEach(track => track.stop());
+      myvad?.stop?.();
     };
   }, []);
 
@@ -98,7 +104,6 @@ export default function VerbalStage() {
 
       const json = await res.json();
 
-      // Decode base64
       const decodedText = new TextDecoder('utf-8').decode(
         Uint8Array.from(atob(json.reply), c => c.charCodeAt(0))
       ).trim();
@@ -117,6 +122,18 @@ export default function VerbalStage() {
         <div className={`w-4 h-4 rounded-full ${micActive ? 'bg-red-500 animate-ping' : 'bg-gray-300'}`}></div>
         <p>{micActive ? '🎙️ Listening… Speak now' : 'Waiting for speech…'}</p>
       </div>
+
+      <button
+        onClick={() => {
+          console.log("🔘 Manual stop triggered");
+          if (mediaRecorderRef.current?.state === 'recording') {
+            mediaRecorderRef.current.stop();
+          }
+        }}
+        className="bg-red-200 text-red-800 px-4 py-1 rounded"
+      >
+        ⏹️ Force Stop
+      </button>
 
       {transcript && (
         <div className="bg-white p-4 rounded shadow">
