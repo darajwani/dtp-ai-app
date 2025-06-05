@@ -58,7 +58,8 @@ export default function VerbalStage() {
           },
 
           onFrameProcessed: (res) => {
-            console.log("🧠 VAD probability:", res.speech_prob);
+            const prob = res?.prob ?? res?.speech_prob ?? 'undefined';
+            console.log("🧠 VAD probability:", prob);
           },
 
           modelURL: '/vad/silero_vad.onnx',
@@ -102,7 +103,14 @@ export default function VerbalStage() {
         body: formData,
       });
 
-      const json = await res.json();
+      let json;
+      try {
+        json = await res.json();
+      } catch (jsonErr) {
+        const fallbackText = await res.text();
+        console.error("❌ Transcription response was not JSON:", fallbackText);
+        return;
+      }
 
       const decodedText = new TextDecoder('utf-8').decode(
         Uint8Array.from(atob(json.reply), c => c.charCodeAt(0))
@@ -110,7 +118,7 @@ export default function VerbalStage() {
 
       setTranscript(prev => prev + '\n' + decodedText);
     } catch (err) {
-      console.error('Transcription error:', err);
+      console.error('❌ Transcription error:', err);
     }
   }
 
