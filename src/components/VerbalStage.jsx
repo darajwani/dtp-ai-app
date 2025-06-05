@@ -12,57 +12,70 @@ export default function VerbalStage() {
   useEffect(() => {
     async function startVAD() {
       const vad = window?.vad || window;
-      if (!vad || !vad.MicVAD) return;
+      if (!vad || !vad.MicVAD) {
+        console.error("❌ MicVAD not found on window");
+        return;
+      }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log("✅ Microphone access granted");
+        streamRef.current = stream;
 
-      const myvad = await vad.MicVAD.new({
-        onSpeechStart: () => {
-          if (micActive) return;
-          console.log("Speech started");
-          setMicActive(true);
-          chunkBufferRef.current = [];
+        const myvad = await vad.MicVAD.new({
+          onSpeechStart: () => {
+            if (micActive) return;
+            console.log("🎙️ Speech started");
+            setMicActive(true);
+            chunkBufferRef.current = [];
 
-          const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-          mediaRecorderRef.current = recorder;
+            const recorder = new MediaRecorder(streamRef.current, {
+              mimeType: 'audio/webm;codecs=opus'
+            });
+            mediaRecorderRef.current = recorder;
 
-          recorder.ondataavailable = e => {
-            if (e.data.size > 0) chunkBufferRef.current.push(e.data);
-          };
+            recorder.ondataavailable = e => {
+              if (e.data.size > 0) chunkBufferRef.current.push(e.data);
+            };
 
-          recorder.onstop = () => {
-            const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-            sendToTranscription(blob, isRecordingFinalRef.current);
-          };
+            recorder.onstop = () => {
+              console.log("🛑 Recorder stopped, sending...");
+              const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
+              sendToTranscription(blob, isRecordingFinalRef.current);
+            };
 
-          recorder.start();
-        },
+            recorder.start();
+          },
 
-        onSpeechEnd: () => {
-          console.log("Speech ended");
-          setMicActive(false);
+          onSpeechEnd: () => {
+            console.log("🤐 Speech ended");
+            setMicActive(false);
+            if (mediaRecorderRef.current?.state === 'recording') {
+              mediaRecorderRef.current.stop();
+            }
+          },
+
+          modelURL: '/vad/silero_vad.onnx',
+          throttleTime: 200,
+          positiveSpeechThreshold: 0.85,
+          negativeSpeechThreshold: 0.6,
+        });
+
+        await myvad.start();
+        console.log("✅ VAD started");
+
+        // Stop recording after 10 mins
+        setTimeout(() => {
+          console.log("⏱️ Time limit reached. Sending final audio...");
+          isRecordingFinalRef.current = true;
           if (mediaRecorderRef.current?.state === 'recording') {
             mediaRecorderRef.current.stop();
           }
-        },
+        }, 10 * 60 * 1000); // 10 minutes
 
-        modelURL: '/vad/silero_vad.onnx',
-        throttleTime: 200,
-        positiveSpeechThreshold: 0.85,
-        negativeSpeechThreshold: 0.6,
-      });
-
-      myvad.start();
-
-      // Stop recording after 10 mins
-      setTimeout(() => {
-        console.log("⏱️ Time limit reached. Sending final audio...");
-        isRecordingFinalRef.current = true;
-        if (mediaRecorderRef.current?.state === 'recording') {
-          mediaRecorderRef.current.stop();
-        }
-      }, 10 * 60 * 1000); // 10 minutes
+      } catch (err) {
+        console.error("❌ Error initializing VAD or mic:", err);
+      }
     }
 
     startVAD();
