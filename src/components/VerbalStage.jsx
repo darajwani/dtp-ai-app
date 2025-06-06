@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 
 export default function VerbalStage() {
   const [transcript, setTranscript] = useState('');
-  const [finalFeedback, setFinalFeedback] = useState('');
   const [micActive, setMicActive] = useState(false);
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
@@ -23,10 +22,12 @@ export default function VerbalStage() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         streamRef.current = stream;
+        console.log("🎤 Microphone access granted");
 
         myvad = await vad.MicVAD.new({
           onSpeechStart: () => {
             if (micActive) return;
+            console.log("🎙️ Speech started");
             setMicActive(true);
             chunkBufferRef.current = [];
 
@@ -40,21 +41,27 @@ export default function VerbalStage() {
             };
 
             recorder.onstop = () => {
-              const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
               const isFinal = isFinalTriggerPendingRef.current;
-              if (blob.size > 1000) {
-                sendToTranscription(blob, isFinal);
-              } else {
-                console.warn("⚠️ No recording active or too small, skipping.");
-              }
               isFinalTriggerPendingRef.current = false;
+
+              const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
+
+              if (blob.size < 1000) {
+                console.warn("⚠️ Blob too small, skipping send");
+                return;
+              }
+
+              const filename = isFinal ? 'verbal-final.webm' : 'verbal-fragment.webm';
+              console.log(`📤 Sending ${filename}`);
+              sendToTranscription(blob, filename);
+              setMicActive(false);
             };
 
             recorder.start();
           },
 
           onSpeechEnd: () => {
-            setMicActive(false);
+            console.log("🛑 Speech ended");
             if (mediaRecorderRef.current?.state === 'recording') {
               mediaRecorderRef.current.stop();
             }
@@ -75,8 +82,9 @@ export default function VerbalStage() {
         });
 
         await myvad.start();
+        console.log("✅ VAD started");
       } catch (err) {
-        console.error("❌ Error initializing VAD or mic:", err);
+        console.error("❌ Error initializing mic or VAD:", err);
       }
     }
 
@@ -88,8 +96,7 @@ export default function VerbalStage() {
     };
   }, []);
 
-  async function sendToTranscription(blob, isFinal = false) {
-    const filename = isFinal ? 'verbal-final.webm' : 'verbal-fragment.webm';
+  async function sendToTranscription(blob, filename) {
     const formData = new FormData();
     formData.append('file', blob, filename);
 
@@ -107,16 +114,12 @@ export default function VerbalStage() {
       }
 
       const json = JSON.parse(raw);
+
       const decodedText = new TextDecoder('utf-8').decode(
         Uint8Array.from(atob(json.reply), (c) => c.charCodeAt(0))
       ).trim();
 
-      if (isFinal) {
-        setFinalFeedback(decodedText);
-        console.log("✅ Final feedback received");
-      } else {
-        setTranscript((prev) => prev + '\n' + decodedText);
-      }
+      setTranscript((prev) => prev + '\n\n' + decodedText);
     } catch (err) {
       console.error('❌ Transcription fetch error:', err);
     }
@@ -135,7 +138,10 @@ export default function VerbalStage() {
         <button
           onClick={() => {
             if (mediaRecorderRef.current?.state === 'recording') {
+              console.log("⏹️ Force Stop triggered");
               mediaRecorderRef.current.stop();
+            } else {
+              console.log("⚠️ No active recording to stop");
             }
           }}
           className="bg-red-200 text-red-800 px-4 py-1 rounded"
@@ -145,10 +151,12 @@ export default function VerbalStage() {
 
         <button
           onClick={() => {
-            console.log("✅ Send Final Triggered");
-            isFinalTriggerPendingRef.current = true;
             if (mediaRecorderRef.current?.state === 'recording') {
+              console.log("✅ Final triggered & stopped");
+              isFinalTriggerPendingRef.current = true;
               mediaRecorderRef.current.stop();
+            } else {
+              console.log("⚠️ No active recording for final trigger");
             }
           }}
           className="bg-green-200 text-green-800 px-4 py-1 rounded"
@@ -159,15 +167,8 @@ export default function VerbalStage() {
 
       {transcript && (
         <div className="bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-2">📝 Transcript</h3>
+          <h3 className="font-semibold mb-2">📝 Transcript / Feedback</h3>
           <pre className="whitespace-pre-wrap text-gray-800">{transcript}</pre>
-        </div>
-      )}
-
-      {finalFeedback && (
-        <div className="bg-green-50 p-4 rounded shadow border border-green-300">
-          <h3 className="font-semibold mb-2 text-green-800">📋 Final Feedback</h3>
-          <pre className="whitespace-pre-wrap text-gray-900">{finalFeedback}</pre>
         </div>
       )}
     </div>
