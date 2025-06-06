@@ -38,11 +38,11 @@ export default function VerbalStage() {
 
           recorder.onstop = () => {
             setMicActive(false);
-            const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
             const isFinal = recordingFinalNow.current;
-            const filename = isFinal ? 'verbal-final.webm' : 'verbal-fragment.webm';
-
             recordingFinalNow.current = false;
+
+            const filename = isFinal ? 'verbal-final.webm' : 'verbal-fragment.webm';
+            const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
             sendToTranscription(blob, filename);
           };
 
@@ -94,7 +94,11 @@ export default function VerbalStage() {
         Uint8Array.from(atob(json.reply), c => c.charCodeAt(0))
       ).trim();
 
-      setTranscript((prev) => prev + '\n' + decoded);
+      setTranscript((prev) =>
+        filename === 'verbal-final.webm'
+          ? prev + '\n\n📢 Feedback:\n' + decoded
+          : prev + '\n' + decoded
+      );
     } catch (err) {
       console.error("❌ Transcription error:", err);
     }
@@ -128,7 +132,7 @@ export default function VerbalStage() {
 
       setTimeout(() => {
         if (recorder.state === 'recording') recorder.stop();
-      }, 1000); // capture 1 sec
+      }, 1000); // capture 1 sec of fallback
     }
   }
 
