@@ -38,11 +38,11 @@ export default function VerbalStage() {
 
           recorder.onstop = () => {
             setMicActive(false);
-            const isFinal = recordingFinalNow.current;
-            recordingFinalNow.current = false;
-
-            const filename = isFinal ? 'verbal-final.webm' : 'verbal-fragment.webm';
             const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
+            const isFinal = recordingFinalNow.current;
+            const filename = isFinal ? 'verbal-final.webm' : 'verbal-fragment.webm';
+
+            recordingFinalNow.current = false;
             sendToTranscription(blob, filename);
           };
 
@@ -94,11 +94,7 @@ export default function VerbalStage() {
         Uint8Array.from(atob(json.reply), c => c.charCodeAt(0))
       ).trim();
 
-      setTranscript((prev) =>
-        filename === 'verbal-final.webm'
-          ? prev + '\n\n📢 Feedback:\n' + decoded
-          : prev + '\n' + decoded
-      );
+      setTranscript((prev) => prev + '\n' + decoded);
     } catch (err) {
       console.error("❌ Transcription error:", err);
     }
@@ -132,7 +128,7 @@ export default function VerbalStage() {
 
       setTimeout(() => {
         if (recorder.state === 'recording') recorder.stop();
-      }, 1000); // capture 1 sec of fallback
+      }, 1000); // capture 1 sec
     }
   }
 
@@ -141,7 +137,7 @@ export default function VerbalStage() {
       <h2 className="text-2xl font-bold text-yellow-800">🟡 Stage 4 – Verbal Presentation</h2>
 
       <div className="flex items-center space-x-3">
-        <div className={`w-4 h-4 rounded-full ${micActive ? 'bg-red-500 animate-ping' : 'bg-gray-300'}`}></div>
+        <div className={w-4 h-4 rounded-full ${micActive ? 'bg-red-500 animate-ping' : 'bg-gray-300'}}></div>
         <p>{micActive ? '🎙️ Listening… Speak now' : 'Waiting for speech…'}</p>
       </div>
 
@@ -168,7 +164,7 @@ export default function VerbalStage() {
 
       {transcript && (
         <div className="bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-2">📝 Transcript / Feedback</h3>
+          <h3 className="font-semibold mb-2">📝 Transcript</h3>
           <pre className="whitespace-pre-wrap text-gray-800">{transcript}</pre>
         </div>
       )}
