@@ -7,10 +7,9 @@ export default function VerbalStage() {
   const streamRef = useRef(null);
   const chunkBufferRef = useRef([]);
   const recordingFinalNow = useRef(false);
+  const vadInstanceRef = useRef(null);
 
   useEffect(() => {
-    let vadInstance;
-
     async function startVAD() {
       const vad = window?.vad || window;
       if (!vad?.MicVAD) {
@@ -21,7 +20,7 @@ export default function VerbalStage() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      vadInstance = await vad.MicVAD.new({
+      const vadInstance = await vad.MicVAD.new({
         onSpeechStart: () => {
           if (mediaRecorderRef.current?.state === 'recording') return;
 
@@ -38,12 +37,19 @@ export default function VerbalStage() {
 
           recorder.onstop = () => {
             setMicActive(false);
+            const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
             const isFinal = recordingFinalNow.current;
+            const filename = isFinal ? 'verbal-final.webm' : 'verbal-fragment.webm';
             recordingFinalNow.current = false;
 
-            const filename = isFinal ? 'verbal-final.webm' : 'verbal-fragment.webm';
-            const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
             sendToTranscription(blob, filename);
+
+            if (isFinal) {
+              // Fully stop mic and VAD
+              vadInstance.stop();
+              stream.getTracks().forEach(track => track.stop());
+              console.log("🎤 Mic and VAD fully stopped after Final");
+            }
           };
 
           mediaRecorderRef.current = recorder;
@@ -62,14 +68,15 @@ export default function VerbalStage() {
         negativeSpeechThreshold: 0.3,
       });
 
+      vadInstanceRef.current = vadInstance;
       await vadInstance.start();
     }
 
     startVAD();
 
     return () => {
-      vadInstance?.stop();
-      streamRef.current?.getTracks().forEach((track) => track.stop());
+      vadInstanceRef.current?.stop();
+      streamRef.current?.getTracks().forEach(track => track.stop());
     };
   }, []);
 
@@ -94,11 +101,7 @@ export default function VerbalStage() {
         Uint8Array.from(atob(json.reply), c => c.charCodeAt(0))
       ).trim();
 
-      setTranscript((prev) =>
-        filename === 'verbal-final.webm'
-          ? prev + '\n\n📢 Feedback:\n' + decoded
-          : prev + '\n' + decoded
-      );
+      setTranscript((prev) => prev + '\n' + decoded);
     } catch (err) {
       console.error("❌ Transcription error:", err);
     }
@@ -125,6 +128,11 @@ export default function VerbalStage() {
       recorder.onstop = () => {
         const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
         sendToTranscription(blob, 'verbal-final.webm');
+
+        // Fully stop mic and VAD
+        vadInstanceRef.current?.stop();
+        streamRef.current?.getTracks().forEach(track => track.stop());
+        console.log("🎤 Mic and VAD fully stopped after short final capture");
       };
 
       mediaRecorderRef.current = recorder;
@@ -132,7 +140,7 @@ export default function VerbalStage() {
 
       setTimeout(() => {
         if (recorder.state === 'recording') recorder.stop();
-      }, 1000); // capture 1 sec of fallback
+      }, 1000); // capture 1 sec
     }
   }
 
