@@ -137,7 +137,7 @@ export default function VerbalStage() {
       <h2 className="text-2xl font-bold text-yellow-800">🟡 Stage 4 – Verbal Presentation</h2>
 
       <div className="flex items-center space-x-3">
-        <div className={w-4 h-4 rounded-full ${micActive ? 'bg-red-500 animate-ping' : 'bg-gray-300'}}></div>
+        <div className={`w-4 h-4 rounded-full ${micActive ? 'bg-red-500 animate-ping' : 'bg-gray-300'}`}></div>
         <p>{micActive ? '🎙️ Listening… Speak now' : 'Waiting for speech…'}</p>
       </div>
 
