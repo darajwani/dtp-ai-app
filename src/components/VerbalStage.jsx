@@ -2,78 +2,94 @@ import { useEffect, useRef, useState } from 'react';
 
 export default function VerbalStage() {
   const [transcript, setTranscript] = useState('');
+  const [finalFeedback, setFinalFeedback] = useState('');
   const [micActive, setMicActive] = useState(false);
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunkBufferRef = useRef([]);
-  const recordingFinalNow = useRef(false);
+  const isFinalTriggerPendingRef = useRef(false);
+  const lastLogTimeRef = useRef(Date.now());
 
   useEffect(() => {
-    let vadInstance;
+    let myvad;
 
     async function startVAD() {
       const vad = window?.vad || window;
-      if (!vad?.MicVAD) {
-        console.error("❌ MicVAD not found");
+      if (!vad || !vad.MicVAD) {
+        console.error("❌ MicVAD not found on window");
         return;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
 
-      vadInstance = await vad.MicVAD.new({
-        onSpeechStart: () => {
-          if (mediaRecorderRef.current?.state === 'recording') return;
+        myvad = await vad.MicVAD.new({
+          onSpeechStart: () => {
+            if (micActive) return;
+            setMicActive(true);
+            chunkBufferRef.current = [];
 
-          chunkBufferRef.current = [];
-          setMicActive(true);
+            const recorder = new MediaRecorder(streamRef.current, {
+              mimeType: 'audio/webm;codecs=opus',
+            });
+            mediaRecorderRef.current = recorder;
 
-          const recorder = new MediaRecorder(streamRef.current, {
-            mimeType: 'audio/webm;codecs=opus',
-          });
+            recorder.ondataavailable = (e) => {
+              if (e.data.size > 0) chunkBufferRef.current.push(e.data);
+            };
 
-          recorder.ondataavailable = (e) => {
-            if (e.data.size > 0) chunkBufferRef.current.push(e.data);
-          };
+            recorder.onstop = () => {
+              const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
+              const isFinal = isFinalTriggerPendingRef.current;
+              if (blob.size > 1000) {
+                sendToTranscription(blob, isFinal);
+              } else {
+                console.warn("⚠️ No recording active or too small, skipping.");
+              }
+              isFinalTriggerPendingRef.current = false;
+            };
 
-          recorder.onstop = () => {
+            recorder.start();
+          },
+
+          onSpeechEnd: () => {
             setMicActive(false);
-            const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-            const isFinal = recordingFinalNow.current;
-            const filename = isFinal ? 'verbal-final.webm' : 'verbal-fragment.webm';
+            if (mediaRecorderRef.current?.state === 'recording') {
+              mediaRecorderRef.current.stop();
+            }
+          },
 
-            recordingFinalNow.current = false;
-            sendToTranscription(blob, filename);
-          };
+          onFrameProcessed: (res) => {
+            const now = Date.now();
+            if (now - lastLogTimeRef.current > 1000) {
+              console.log("🧠 isSpeech:", res.isSpeech, "| notSpeech:", res.notSpeech);
+              lastLogTimeRef.current = now;
+            }
+          },
 
-          mediaRecorderRef.current = recorder;
-          recorder.start();
-        },
+          modelURL: '/vad/silero_vad.onnx',
+          throttleTime: 200,
+          positiveSpeechThreshold: 0.5,
+          negativeSpeechThreshold: 0.3,
+        });
 
-        onSpeechEnd: () => {
-          if (mediaRecorderRef.current?.state === 'recording') {
-            mediaRecorderRef.current.stop();
-          }
-        },
-
-        modelURL: '/vad/silero_vad.onnx',
-        throttleTime: 200,
-        positiveSpeechThreshold: 0.5,
-        negativeSpeechThreshold: 0.3,
-      });
-
-      await vadInstance.start();
+        await myvad.start();
+      } catch (err) {
+        console.error("❌ Error initializing VAD or mic:", err);
+      }
     }
 
     startVAD();
 
     return () => {
-      vadInstance?.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
+      myvad?.stop?.();
     };
   }, []);
 
-  async function sendToTranscription(blob, filename) {
+  async function sendToTranscription(blob, isFinal = false) {
+    const filename = isFinal ? 'verbal-final.webm' : 'verbal-fragment.webm';
     const formData = new FormData();
     formData.append('file', blob, filename);
 
@@ -84,51 +100,25 @@ export default function VerbalStage() {
       });
 
       const raw = await res.text();
+
       if (!raw.trim().startsWith('{')) {
-        console.error("❌ Transcription not JSON:", raw);
+        console.error("❌ Transcription response not JSON:", raw);
         return;
       }
 
       const json = JSON.parse(raw);
-      const decoded = new TextDecoder().decode(
-        Uint8Array.from(atob(json.reply), c => c.charCodeAt(0))
+      const decodedText = new TextDecoder('utf-8').decode(
+        Uint8Array.from(atob(json.reply), (c) => c.charCodeAt(0))
       ).trim();
 
-      setTranscript((prev) => prev + '\n' + decoded);
+      if (isFinal) {
+        setFinalFeedback(decodedText);
+        console.log("✅ Final feedback received");
+      } else {
+        setTranscript((prev) => prev + '\n' + decodedText);
+      }
     } catch (err) {
-      console.error("❌ Transcription error:", err);
-    }
-  }
-
-  function handleFinal() {
-    if (mediaRecorderRef.current?.state === 'recording') {
-      recordingFinalNow.current = true;
-      mediaRecorderRef.current.stop();
-      console.log("✅ Final triggered & stopped");
-    } else {
-      console.warn("⚠️ No active recording; starting a short final capture");
-      recordingFinalNow.current = true;
-      chunkBufferRef.current = [];
-
-      const recorder = new MediaRecorder(streamRef.current, {
-        mimeType: 'audio/webm;codecs=opus',
-      });
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunkBufferRef.current.push(e.data);
-      };
-
-      recorder.onstop = () => {
-        const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-        sendToTranscription(blob, 'verbal-final.webm');
-      };
-
-      mediaRecorderRef.current = recorder;
-      recorder.start();
-
-      setTimeout(() => {
-        if (recorder.state === 'recording') recorder.stop();
-      }, 1000); // capture 1 sec
+      console.error('❌ Transcription fetch error:', err);
     }
   }
 
@@ -146,7 +136,6 @@ export default function VerbalStage() {
           onClick={() => {
             if (mediaRecorderRef.current?.state === 'recording') {
               mediaRecorderRef.current.stop();
-              console.log("⏹️ Force stop triggered");
             }
           }}
           className="bg-red-200 text-red-800 px-4 py-1 rounded"
@@ -155,7 +144,13 @@ export default function VerbalStage() {
         </button>
 
         <button
-          onClick={handleFinal}
+          onClick={() => {
+            console.log("✅ Send Final Triggered");
+            isFinalTriggerPendingRef.current = true;
+            if (mediaRecorderRef.current?.state === 'recording') {
+              mediaRecorderRef.current.stop();
+            }
+          }}
           className="bg-green-200 text-green-800 px-4 py-1 rounded"
         >
           📤 Send as Final (Test)
@@ -166,6 +161,13 @@ export default function VerbalStage() {
         <div className="bg-white p-4 rounded shadow">
           <h3 className="font-semibold mb-2">📝 Transcript</h3>
           <pre className="whitespace-pre-wrap text-gray-800">{transcript}</pre>
+        </div>
+      )}
+
+      {finalFeedback && (
+        <div className="bg-green-50 p-4 rounded shadow border border-green-300">
+          <h3 className="font-semibold mb-2 text-green-800">📋 Final Feedback</h3>
+          <pre className="whitespace-pre-wrap text-gray-900">{finalFeedback}</pre>
         </div>
       )}
     </div>
