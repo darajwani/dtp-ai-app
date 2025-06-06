@@ -6,16 +6,16 @@ export default function VerbalStage() {
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunkBufferRef = useRef([]);
-  const isFinalTriggeredRef = useRef(false);
+  const isRecordingFinalRef = useRef(false);
   const lastLogTimeRef = useRef(Date.now());
 
   useEffect(() => {
-    let vadInstance;
+    let myvad;
 
     async function startVAD() {
       const vad = window?.vad || window;
-      if (!vad?.MicVAD) {
-        console.error("❌ MicVAD not found");
+      if (!vad || !vad.MicVAD) {
+        console.error("❌ MicVAD not found on window");
         return;
       }
 
@@ -24,33 +24,30 @@ export default function VerbalStage() {
         console.log("✅ Microphone access granted");
         streamRef.current = stream;
 
-        vadInstance = await vad.MicVAD.new({
+        myvad = await vad.MicVAD.new({
           onSpeechStart: () => {
             if (micActive) return;
             console.log("🎙️ Speech started");
             setMicActive(true);
             chunkBufferRef.current = [];
 
-            const recorder = new MediaRecorder(stream, {
+            const recorder = new MediaRecorder(streamRef.current, {
               mimeType: 'audio/webm;codecs=opus',
             });
+            mediaRecorderRef.current = recorder;
 
             recorder.ondataavailable = (e) => {
-              if (e.data.size > 0) {
-                chunkBufferRef.current.push(e.data);
-              }
+              if (e.data.size > 0) chunkBufferRef.current.push(e.data);
             };
 
             recorder.onstop = () => {
               console.log("🛑 Recorder stopped, sending...");
-              const isFinal = isFinalTriggeredRef.current;
+              const isFinal = isRecordingFinalRef.current;
               const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-              const filename = isFinal ? 'verbal-final.webm' : 'verbal-fragment.webm';
-              sendToTranscription(blob, filename);
-              isFinalTriggeredRef.current = false;
+              sendToTranscription(blob, isFinal);
+              isRecordingFinalRef.current = false;
             };
 
-            mediaRecorderRef.current = recorder;
             recorder.start();
           },
 
@@ -76,10 +73,19 @@ export default function VerbalStage() {
           negativeSpeechThreshold: 0.3,
         });
 
-        await vadInstance.start();
+        await myvad.start();
         console.log("✅ VAD started");
+
+        // Optional: 10-minute timer auto-final (can be removed if not needed)
+        setTimeout(() => {
+          console.log("⏱️ Time limit reached. Sending final audio...");
+          isRecordingFinalRef.current = true;
+          if (mediaRecorderRef.current?.state === 'recording') {
+            mediaRecorderRef.current.stop();
+          }
+        }, 10 * 60 * 1000);
       } catch (err) {
-        console.error("❌ Error initializing mic or VAD:", err);
+        console.error("❌ Error initializing VAD or mic:", err);
       }
     }
 
@@ -87,11 +93,12 @@ export default function VerbalStage() {
 
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
-      vadInstance?.stop?.();
+      myvad?.stop?.();
     };
   }, []);
 
-  async function sendToTranscription(blob, filename) {
+  async function sendToTranscription(blob, isFinal = false) {
+    const filename = isFinal ? 'verbal-final.webm' : 'verbal-fragment.webm';
     const formData = new FormData();
     formData.append('file', blob, filename);
 
@@ -102,20 +109,19 @@ export default function VerbalStage() {
       });
 
       const raw = await res.text();
-
       if (!raw.trim().startsWith('{')) {
-        console.error("❌ Transcription not JSON:", raw);
+        console.error("❌ Transcription response not JSON:", raw);
         return;
       }
 
       const json = JSON.parse(raw);
-      const decoded = new TextDecoder().decode(
-        Uint8Array.from(atob(json.reply), c => c.charCodeAt(0))
+      const decodedText = new TextDecoder('utf-8').decode(
+        Uint8Array.from(atob(json.reply), (c) => c.charCodeAt(0))
       ).trim();
 
-      setTranscript(prev => prev + '\n' + decoded);
+      setTranscript((prev) => prev + '\n' + decodedText);
     } catch (err) {
-      console.error("❌ Error sending audio:", err);
+      console.error('❌ Transcription fetch error:', err);
     }
   }
 
@@ -131,8 +137,7 @@ export default function VerbalStage() {
       <div className="flex space-x-4">
         <button
           onClick={() => {
-            console.log("⏹️ Force Stop triggered");
-            isFinalTriggeredRef.current = false;
+            console.log("🔘 Manual stop triggered");
             if (mediaRecorderRef.current?.state === 'recording') {
               mediaRecorderRef.current.stop();
             }
@@ -144,10 +149,14 @@ export default function VerbalStage() {
 
         <button
           onClick={() => {
-            console.log("✅ Final Triggered");
-            isFinalTriggeredRef.current = true;
+            console.log("✅ Send Final Triggered");
+            isRecordingFinalRef.current = true;
             if (mediaRecorderRef.current?.state === 'recording') {
               mediaRecorderRef.current.stop();
+            } else {
+              // If not recording, simulate a short silent audio so Make route can still detect it
+              const silenceBlob = new Blob([new Uint8Array(1)], { type: 'audio/webm' });
+              sendToTranscription(silenceBlob, true);
             }
           }}
           className="bg-green-200 text-green-800 px-4 py-1 rounded"
