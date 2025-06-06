@@ -10,6 +10,8 @@ export default function VerbalStage() {
   const vadInstanceRef = useRef(null);
 
   useEffect(() => {
+    let mounted = true;
+
     async function startVAD() {
       const vad = window?.vad || window;
       if (!vad?.MicVAD) {
@@ -40,14 +42,16 @@ export default function VerbalStage() {
             const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
             const isFinal = recordingFinalNow.current;
             const filename = isFinal ? 'verbal-final.webm' : 'verbal-fragment.webm';
-            recordingFinalNow.current = false;
 
+            recordingFinalNow.current = false;
             sendToTranscription(blob, filename);
 
             if (isFinal) {
-              // Fully stop mic and VAD
-              vadInstance.stop();
-              stream.getTracks().forEach(track => track.stop());
+              // stop everything
+              if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
+                vadInstanceRef.current.stop();
+              }
+              streamRef.current?.getTracks().forEach(track => track.stop());
               console.log("🎤 Mic and VAD fully stopped after Final");
             }
           };
@@ -69,14 +73,17 @@ export default function VerbalStage() {
       });
 
       vadInstanceRef.current = vadInstance;
-      await vadInstance.start();
+      if (mounted) await vadInstance.start();
     }
 
     startVAD();
 
     return () => {
-      vadInstanceRef.current?.stop();
-      streamRef.current?.getTracks().forEach(track => track.stop());
+      mounted = false;
+      if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
+        vadInstanceRef.current.stop();
+      }
+      streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
 
@@ -129,10 +136,12 @@ export default function VerbalStage() {
         const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
         sendToTranscription(blob, 'verbal-final.webm');
 
-        // Fully stop mic and VAD
-        vadInstanceRef.current?.stop();
+        // stop everything
+        if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
+          vadInstanceRef.current.stop();
+        }
         streamRef.current?.getTracks().forEach(track => track.stop());
-        console.log("🎤 Mic and VAD fully stopped after short final capture");
+        console.log("🎤 Mic and VAD fully stopped after short final");
       };
 
       mediaRecorderRef.current = recorder;
@@ -140,7 +149,7 @@ export default function VerbalStage() {
 
       setTimeout(() => {
         if (recorder.state === 'recording') recorder.stop();
-      }, 1000); // capture 1 sec
+      }, 1000); // 1 sec capture
     }
   }
 
