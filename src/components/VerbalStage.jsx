@@ -21,11 +21,13 @@ export default function VerbalStage() {
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log("✅ Microphone access granted");
         streamRef.current = stream;
 
         myvad = await vad.MicVAD.new({
           onSpeechStart: () => {
             if (micActive) return;
+            console.log("🎙️ Speech started");
             setMicActive(true);
             chunkBufferRef.current = [];
 
@@ -39,16 +41,18 @@ export default function VerbalStage() {
             };
 
             recorder.onstop = () => {
+              console.log("🛑 Recorder stopped, sending...");
               const isFinal = isRecordingFinalRef.current;
               const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
               sendToTranscription(blob, isFinal);
-              isRecordingFinalRef.current = false;
+              isRecordingFinalRef.current = false; // Reset after use
             };
 
             recorder.start();
           },
 
           onSpeechEnd: () => {
+            console.log("🤐 Speech ended");
             setMicActive(false);
             if (mediaRecorderRef.current?.state === 'recording') {
               mediaRecorderRef.current.stop();
@@ -90,18 +94,20 @@ export default function VerbalStage() {
     formData.append('file', blob, filename);
 
     try {
-      const res = await fetch('https://hook.eu2.make.com/your-webhook-url-here', {
+      const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
         method: 'POST',
         body: formData,
       });
 
       const raw = await res.text();
+
       if (!raw.trim().startsWith('{')) {
         console.error("❌ Transcription response not JSON:", raw);
         return;
       }
 
       const json = JSON.parse(raw);
+
       const decodedText = new TextDecoder('utf-8').decode(
         Uint8Array.from(atob(json.reply), (c) => c.charCodeAt(0))
       ).trim();
@@ -124,6 +130,7 @@ export default function VerbalStage() {
       <div className="flex space-x-4">
         <button
           onClick={() => {
+            console.log("🔘 Manual stop triggered");
             if (mediaRecorderRef.current?.state === 'recording') {
               mediaRecorderRef.current.stop();
             }
@@ -137,31 +144,8 @@ export default function VerbalStage() {
           onClick={() => {
             console.log("✅ Send Final Triggered");
             isRecordingFinalRef.current = true;
-
             if (mediaRecorderRef.current?.state === 'recording') {
               mediaRecorderRef.current.stop();
-            } else {
-              // Trigger a short silent final recording if nothing is ongoing
-              const recorder = new MediaRecorder(streamRef.current, {
-                mimeType: 'audio/webm;codecs=opus',
-              });
-              mediaRecorderRef.current = recorder;
-              chunkBufferRef.current = [];
-
-              recorder.ondataavailable = (e) => {
-                if (e.data.size > 0) chunkBufferRef.current.push(e.data);
-              };
-
-              recorder.onstop = () => {
-                const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-                sendToTranscription(blob, true);
-                isRecordingFinalRef.current = false;
-              };
-
-              recorder.start();
-              setTimeout(() => {
-                recorder.stop();
-              }, 1000); // 1 second buffer to complete recording
             }
           }}
           className="bg-green-200 text-green-800 px-4 py-1 rounded"
