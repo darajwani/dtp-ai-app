@@ -147,18 +147,25 @@ export default function VerbalStage() {
             if (mediaRecorderRef.current?.state === 'recording') {
               mediaRecorderRef.current.stop();
             } else {
-              const recorder = new MediaRecorder(streamRef.current, {
+              const stream = streamRef.current;
+              if (!stream) {
+                console.error("❌ No stream available for manual final recording");
+                return;
+              }
+
+              chunkBufferRef.current = [];
+
+              const recorder = new MediaRecorder(stream, {
                 mimeType: 'audio/webm;codecs=opus',
               });
               mediaRecorderRef.current = recorder;
-              chunkBufferRef.current = [];
 
               recorder.ondataavailable = (e) => {
                 if (e.data.size > 0) chunkBufferRef.current.push(e.data);
               };
 
               recorder.onstop = () => {
-                console.log("🎤 Final recorder stopped, sending...");
+                console.log("🎤 Manual final recorder stopped, sending...");
                 const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
                 sendToTranscription(blob, true);
                 isRecordingFinalRef.current = false;
@@ -167,7 +174,7 @@ export default function VerbalStage() {
               recorder.start();
               setTimeout(() => {
                 if (recorder.state === 'recording') recorder.stop();
-              }, 1000); // 1-second buffer
+              }, 1000); // 1 second recording
             }
           }}
           className="bg-green-200 text-green-800 px-4 py-1 rounded"
