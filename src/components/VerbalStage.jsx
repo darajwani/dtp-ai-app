@@ -14,7 +14,7 @@ export default function VerbalStage() {
 
     async function startVAD() {
       const vad = window?.vad || window;
-      if (!vad || !vad.MicVAD) {
+      if (!vad?.MicVAD) {
         console.error("❌ MicVAD not found");
         return;
       }
@@ -26,14 +26,12 @@ export default function VerbalStage() {
         myvad = await vad.MicVAD.new({
           onSpeechStart: () => {
             if (micActive) return;
-
             console.log("🎙️ Speech started");
             setMicActive(true);
             chunkBufferRef.current = [];
 
-            const recorder = new MediaRecorder(streamRef.current, {
-              mimeType: 'audio/webm;codecs=opus',
-            });
+            const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            mediaRecorderRef.current = recorder;
 
             recorder.ondataavailable = (e) => {
               if (e.data.size > 0) chunkBufferRef.current.push(e.data);
@@ -41,14 +39,19 @@ export default function VerbalStage() {
 
             recorder.onstop = () => {
               console.log("🛑 Recorder stopped, sending...");
-              const finalFlag = isFinalRef.current;
-              isFinalRef.current = false; // reset
+              const isFinal = isFinalRef.current;
               const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-              sendToTranscription(blob, finalFlag);
+
+              if (blob.size === 0) {
+                console.warn("⚠️ Empty blob, skipping send");
+              } else {
+                sendToTranscription(blob, isFinal);
+              }
+
+              isFinalRef.current = false;
             };
 
             recorder.start();
-            mediaRecorderRef.current = recorder;
           },
 
           onSpeechEnd: () => {
@@ -75,16 +78,15 @@ export default function VerbalStage() {
 
         await myvad.start();
         console.log("✅ VAD started");
-
       } catch (err) {
-        console.error("❌ VAD or mic error:", err);
+        console.error("❌ Mic/VAD error:", err);
       }
     }
 
     startVAD();
 
     return () => {
-      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current?.getTracks().forEach((t) => t.stop());
       myvad?.stop?.();
     };
   }, []);
@@ -107,26 +109,35 @@ export default function VerbalStage() {
       }
 
       const json = JSON.parse(raw);
-      const decoded = new TextDecoder('utf-8').decode(
-        Uint8Array.from(atob(json.reply), c => c.charCodeAt(0))
+      const decodedText = new TextDecoder('utf-8').decode(
+        Uint8Array.from(atob(json.reply), (c) => c.charCodeAt(0))
       ).trim();
 
-      setTranscript((prev) => prev + '\n' + decoded);
+      setTranscript((prev) => prev + '\n' + decodedText);
     } catch (err) {
-      console.error("❌ Transcription error:", err);
+      console.error("❌ Fetch error:", err);
     }
   }
 
   function handleFinalSend() {
     console.log("✅ Send Final Triggered");
+
     isFinalRef.current = true;
 
     if (mediaRecorderRef.current?.state === 'recording') {
+      console.log("🟥 Stopping recorder for final...");
       mediaRecorderRef.current.stop();
     } else {
-      // No speech detected but still trigger final blank blob
-      const silentBlob = new Blob([], { type: 'audio/webm' });
-      sendToTranscription(silentBlob, true);
+      console.log("🟨 No recording active, sending empty blob...");
+      const blob = new Blob([], { type: 'audio/webm' });
+      sendToTranscription(blob, true);
+    }
+  }
+
+  function handleForceStop() {
+    console.log("⏹️ Force Stop Triggered");
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
     }
   }
 
@@ -135,27 +146,15 @@ export default function VerbalStage() {
       <h2 className="text-2xl font-bold text-yellow-800">🟡 Stage 4 – Verbal Presentation</h2>
 
       <div className="flex items-center space-x-3">
-        <div className={`w-4 h-4 rounded-full ${micActive ? 'bg-red-500 animate-ping' : 'bg-gray-300'}`}></div>
+        <div className={`w-4 h-4 rounded-full ${micActive ? 'bg-red-500 animate-ping' : 'bg-gray-300'}`} />
         <p>{micActive ? '🎙️ Listening… Speak now' : 'Waiting for speech…'}</p>
       </div>
 
       <div className="flex space-x-4">
-        <button
-          onClick={() => {
-            console.log("🛑 Force stop triggered");
-            if (mediaRecorderRef.current?.state === 'recording') {
-              mediaRecorderRef.current.stop();
-            }
-          }}
-          className="bg-red-200 text-red-800 px-4 py-1 rounded"
-        >
+        <button onClick={handleForceStop} className="bg-red-200 text-red-800 px-4 py-1 rounded">
           ⏹️ Force Stop
         </button>
-
-        <button
-          onClick={handleFinalSend}
-          className="bg-green-200 text-green-800 px-4 py-1 rounded"
-        >
+        <button onClick={handleFinalSend} className="bg-green-200 text-green-800 px-4 py-1 rounded">
           📤 Send as Final (Test)
         </button>
       </div>
