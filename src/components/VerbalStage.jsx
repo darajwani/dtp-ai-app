@@ -8,7 +8,6 @@ export default function VerbalStage() {
   const chunkBufferRef = useRef([]);
   const isRecordingFinalRef = useRef(false);
   const lastLogTimeRef = useRef(Date.now());
-  const triggerFinalTimeoutRef = useRef(null);
 
   useEffect(() => {
     let myvad;
@@ -86,7 +85,6 @@ export default function VerbalStage() {
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       myvad?.stop?.();
-      clearTimeout(triggerFinalTimeoutRef.current);
     };
   }, []);
 
@@ -145,26 +143,32 @@ export default function VerbalStage() {
           onClick={() => {
             console.log("✅ Send Final Triggered");
             isRecordingFinalRef.current = true;
-            chunkBufferRef.current = [];
-            const recorder = new MediaRecorder(streamRef.current, {
-              mimeType: 'audio/webm;codecs=opus',
-            });
-            mediaRecorderRef.current = recorder;
 
-            recorder.ondataavailable = (e) => {
-              if (e.data.size > 0) chunkBufferRef.current.push(e.data);
-            };
+            if (mediaRecorderRef.current?.state === 'recording') {
+              mediaRecorderRef.current.stop();
+            } else {
+              const recorder = new MediaRecorder(streamRef.current, {
+                mimeType: 'audio/webm;codecs=opus',
+              });
+              mediaRecorderRef.current = recorder;
+              chunkBufferRef.current = [];
 
-            recorder.onstop = () => {
-              console.log("🛑 Final recorder stopped, sending...");
-              const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-              sendToTranscription(blob, true);
-            };
+              recorder.ondataavailable = (e) => {
+                if (e.data.size > 0) chunkBufferRef.current.push(e.data);
+              };
 
-            recorder.start();
-            setTimeout(() => {
-              if (recorder.state === 'recording') recorder.stop();
-            }, 1000); // 1 sec burst for final
+              recorder.onstop = () => {
+                console.log("🎤 Final recorder stopped, sending...");
+                const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
+                sendToTranscription(blob, true);
+                isRecordingFinalRef.current = false;
+              };
+
+              recorder.start();
+              setTimeout(() => {
+                if (recorder.state === 'recording') recorder.stop();
+              }, 1000); // 1-second buffer
+            }
           }}
           className="bg-green-200 text-green-800 px-4 py-1 rounded"
         >
