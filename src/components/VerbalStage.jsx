@@ -21,13 +21,11 @@ export default function VerbalStage() {
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        console.log("✅ Microphone access granted");
         streamRef.current = stream;
 
         myvad = await vad.MicVAD.new({
           onSpeechStart: () => {
             if (micActive) return;
-            console.log("🎙️ Speech started");
             setMicActive(true);
             chunkBufferRef.current = [];
 
@@ -41,7 +39,6 @@ export default function VerbalStage() {
             };
 
             recorder.onstop = () => {
-              console.log("🛑 Recorder stopped, sending...");
               const isFinal = isRecordingFinalRef.current;
               const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
               sendToTranscription(blob, isFinal);
@@ -52,7 +49,6 @@ export default function VerbalStage() {
           },
 
           onSpeechEnd: () => {
-            console.log("🤐 Speech ended");
             setMicActive(false);
             if (mediaRecorderRef.current?.state === 'recording') {
               mediaRecorderRef.current.stop();
@@ -75,15 +71,6 @@ export default function VerbalStage() {
 
         await myvad.start();
         console.log("✅ VAD started");
-
-        // Optional: 10-minute timer auto-final (can be removed if not needed)
-        setTimeout(() => {
-          console.log("⏱️ Time limit reached. Sending final audio...");
-          isRecordingFinalRef.current = true;
-          if (mediaRecorderRef.current?.state === 'recording') {
-            mediaRecorderRef.current.stop();
-          }
-        }, 10 * 60 * 1000);
       } catch (err) {
         console.error("❌ Error initializing VAD or mic:", err);
       }
@@ -103,7 +90,7 @@ export default function VerbalStage() {
     formData.append('file', blob, filename);
 
     try {
-      const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
+      const res = await fetch('https://hook.eu2.make.com/your-webhook-url-here', {
         method: 'POST',
         body: formData,
       });
@@ -137,7 +124,6 @@ export default function VerbalStage() {
       <div className="flex space-x-4">
         <button
           onClick={() => {
-            console.log("🔘 Manual stop triggered");
             if (mediaRecorderRef.current?.state === 'recording') {
               mediaRecorderRef.current.stop();
             }
@@ -151,12 +137,31 @@ export default function VerbalStage() {
           onClick={() => {
             console.log("✅ Send Final Triggered");
             isRecordingFinalRef.current = true;
+
             if (mediaRecorderRef.current?.state === 'recording') {
               mediaRecorderRef.current.stop();
             } else {
-              // If not recording, simulate a short silent audio so Make route can still detect it
-              const silenceBlob = new Blob([new Uint8Array(1)], { type: 'audio/webm' });
-              sendToTranscription(silenceBlob, true);
+              // Trigger a short silent final recording if nothing is ongoing
+              const recorder = new MediaRecorder(streamRef.current, {
+                mimeType: 'audio/webm;codecs=opus',
+              });
+              mediaRecorderRef.current = recorder;
+              chunkBufferRef.current = [];
+
+              recorder.ondataavailable = (e) => {
+                if (e.data.size > 0) chunkBufferRef.current.push(e.data);
+              };
+
+              recorder.onstop = () => {
+                const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
+                sendToTranscription(blob, true);
+                isRecordingFinalRef.current = false;
+              };
+
+              recorder.start();
+              setTimeout(() => {
+                recorder.stop();
+              }, 1000); // 1 second buffer to complete recording
             }
           }}
           className="bg-green-200 text-green-800 px-4 py-1 rounded"
