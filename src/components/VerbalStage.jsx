@@ -37,15 +37,16 @@ export default function VerbalStage() {
 
           recorder.onstop = () => {
             setMicActive(false);
+
             if (chunkBufferRef.current.length === 0) {
               console.warn("⚠️ No audio recorded, skipping submission.");
               return;
             }
 
+            const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
             const filename = recordingFinalNow.current ? 'verbal-final.webm' : 'verbal-fragment.webm';
             recordingFinalNow.current = false;
-           const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-sendToTranscription(blob, filename);
+            sendToTranscription(blob, filename);
           };
 
           mediaRecorderRef.current = recorder;
@@ -96,9 +97,7 @@ sendToTranscription(blob, filename);
       }
 
       const json = JSON.parse(raw);
-      const decoded = new TextDecoder().decode(
-        Uint8Array.from(atob(json.reply), c => c.charCodeAt(0))
-      ).trim();
+      const decoded = atob(json.reply).trim();
 
       const isFinal = filename.includes('final');
       setTranscript(prev => prev + `\n\n${isFinal ? '📋 Final Feedback:\n' : ''}${decoded}`);
@@ -110,7 +109,6 @@ sendToTranscription(blob, filename);
   function handleFinal() {
     console.log("✅ Final triggered");
 
-    // Set flag early to force final recording
     recordingFinalNow.current = true;
 
     if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
