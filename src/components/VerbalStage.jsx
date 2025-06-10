@@ -38,7 +38,7 @@ export default function VerbalStage() {
 
           recorder.onstop = () => {
             setMicActive(false);
-            
+
             if (chunkBufferRef.current.length === 0) {
               console.warn("⚠️ No audio recorded, skipping submission.");
               return;
