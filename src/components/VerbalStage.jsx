@@ -6,7 +6,6 @@ function VerbalStage() {
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunkBufferRef = useRef([]);
-  // This flag indicates if the final file should be generated.
   const recordingFinalNow = useRef(false);
   const vadInstanceRef = useRef(null);
 
@@ -24,7 +23,6 @@ function VerbalStage() {
       const vadInstance = await vad.MicVAD.new({
         onSpeechStart: () => {
           console.log("🗣️ Speech detected!");
-          // If already recording, do not restart.
           if (mediaRecorderRef.current?.state === 'recording') return;
 
           chunkBufferRef.current = [];
@@ -33,31 +31,33 @@ function VerbalStage() {
           const recorder = new MediaRecorder(stream, {
             mimeType: 'audio/webm;codecs=opus',
           });
+
           recorder.ondataavailable = (e) => {
             if (e.data.size > 0) {
               chunkBufferRef.current.push(e.data);
             }
           };
+
           recorder.onstop = () => {
             setMicActive(false);
             if (chunkBufferRef.current.length === 0) {
               console.warn("⚠️ No audio recorded, skipping submission.");
               return;
             }
+
             const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-            // If the final flag is true, send the file as final; otherwise, as a fragment.
             const filename = recordingFinalNow.current ? 'verbal-final.webm' : 'verbal-fragment.webm';
-            // Reset the flag.
             recordingFinalNow.current = false;
+
             console.log(`📤 Sending file: ${filename}`);
             sendToTranscription(blob, filename);
           };
+
           mediaRecorderRef.current = recorder;
           recorder.start();
         },
         onSpeechEnd: () => {
           console.log("🔇 Speech ended.");
-          // If we're not in final mode, stop automatically.
           if (!recordingFinalNow.current && mediaRecorderRef.current?.state === 'recording') {
             mediaRecorderRef.current.stop();
           }
@@ -75,7 +75,7 @@ function VerbalStage() {
     startVAD();
 
     return () => {
-      if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
+      if (vadInstanceRef.current?.stop) {
         vadInstanceRef.current.stop();
       }
       streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -85,32 +85,30 @@ function VerbalStage() {
   async function sendToTranscription(blob, filename) {
     const formData = new FormData();
     formData.append('file', blob, filename);
+
     try {
       const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
         method: 'POST',
         body: formData,
       });
-      console.log("✅ File sent, response status:", res.status);
-      const raw = await res.text();
-      console.log("🔍 Raw response:", raw);
 
-      if (!raw.trim().startsWith('{')) {
-        console.error("❌ Transcription not JSON:", raw);
+      console.log("✅ File sent, response status:", res.status);
+
+      const json = await res.json();
+      console.log("📦 JSON response received:", json);
+
+      if (!json.reply) {
+        console.error("❌ No 'reply' field in response");
         return;
       }
 
-      const json = JSON.parse(raw);
-      let decoded;
-      try {
-        // Decode the base64-encoded reply.
-        decoded = atob(json.reply).trim();
-      } catch (e) {
-        console.warn("Base64 decoding failed; using raw reply.", e);
-        decoded = json.reply.trim();
-      }
+      const decoded = json.reply.trim();
+      console.log("🧪 Final decoded reply:", decoded);
+
       setTranscript(prev => prev + `\n\n📋 Feedback:\n${decoded}`);
     } catch (err) {
       console.error("❌ Transcription error:", err);
+      setTranscript(prev => prev + `\n\n⚠️ Error retrieving feedback.`);
     }
   }
 
@@ -118,14 +116,12 @@ function VerbalStage() {
     console.log("✅ Final triggered");
     recordingFinalNow.current = true;
 
-    if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
+    if (vadInstanceRef.current?.stop) {
       vadInstanceRef.current.stop();
       console.log("🎤 VAD successfully stopped after Final");
-    } else {
-      console.warn("⚠️ VAD stop function not available");
     }
+
     if (mediaRecorderRef.current?.state === 'recording') {
-      // Stop the current recording so the onstop callback sends the final file.
       mediaRecorderRef.current.stop();
     } else {
       console.warn("⚠️ No active recording; capturing short final clip");
@@ -138,22 +134,26 @@ function VerbalStage() {
     const recorder = new MediaRecorder(streamRef.current, {
       mimeType: 'audio/webm;codecs=opus',
     });
+
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) {
         chunkBufferRef.current.push(e.data);
       }
     };
+
     recorder.onstop = () => {
       if (chunkBufferRef.current.length === 0) {
         console.warn("⚠️ No audio recorded, skipping submission.");
         return;
       }
+
       const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
       sendToTranscription(blob, 'verbal-final.webm');
     };
+
     mediaRecorderRef.current = recorder;
     recorder.start();
-    // Fallback: record for 3000ms if no active recording is present.
+
     setTimeout(() => {
       if (recorder.state === 'recording') {
         recorder.stop();
@@ -164,10 +164,12 @@ function VerbalStage() {
   return (
     <div className="bg-yellow-100 min-h-screen p-6 space-y-6">
       <h2 className="text-2xl font-bold text-yellow-800">🟡 Stage 4 – Verbal Presentation</h2>
+
       <div className="flex items-center space-x-3">
         <div className={`w-4 h-4 rounded-full ${micActive ? 'bg-red-500 animate-ping' : 'bg-gray-300'}`}></div>
         <p>{micActive ? '🎙️ Listening… Speak now' : 'Waiting for speech…'}</p>
       </div>
+
       <div className="flex space-x-4">
         <button
           onClick={() => {
@@ -187,6 +189,7 @@ function VerbalStage() {
           📤 Send as Final (Test)
         </button>
       </div>
+
       {transcript && (
         <div className="bg-white p-4 rounded shadow">
           <h3 className="font-semibold mb-2">📝 Transcript / Feedback</h3>
