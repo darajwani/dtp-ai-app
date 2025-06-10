@@ -6,6 +6,7 @@ function VerbalStage() {
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunkBufferRef = useRef([]);
+  // This flag tells the onstop callback whether to label the recording as final.
   const recordingFinalNow = useRef(false);
   const vadInstanceRef = useRef(null);
 
@@ -18,9 +19,11 @@ function VerbalStage() {
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
+
       const vadInstance = await vad.MicVAD.new({
         onSpeechStart: () => {
           console.log("🗣️ Speech detected!");
+          // If already recording, do not restart.
           if (mediaRecorderRef.current?.state === 'recording') return;
 
           chunkBufferRef.current = [];
@@ -41,8 +44,9 @@ function VerbalStage() {
               return;
             }
             const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-            // Choose filename based on the final flag.
+            // If the final flag is true, use the final filename; otherwise, use the fragment.
             const filename = recordingFinalNow.current ? 'verbal-final.webm' : 'verbal-fragment.webm';
+            // Reset the flag immediately after sending.
             recordingFinalNow.current = false;
             console.log(`📤 Sending file: ${filename}`);
             sendToTranscription(blob, filename);
@@ -52,7 +56,9 @@ function VerbalStage() {
         },
         onSpeechEnd: () => {
           console.log("🔇 Speech ended.");
-          if (mediaRecorderRef.current?.state === 'recording') {
+          // IMPORTANT: If final mode has been triggered,
+          // skip the automatic stopping so that the final button can stop the recording.
+          if (!recordingFinalNow.current && mediaRecorderRef.current?.state === 'recording') {
             mediaRecorderRef.current.stop();
           }
         },
@@ -61,6 +67,7 @@ function VerbalStage() {
         positiveSpeechThreshold: 0.5,
         negativeSpeechThreshold: 0.3,
       });
+
       vadInstanceRef.current = vadInstance;
       await vadInstance.start();
     }
@@ -101,6 +108,7 @@ function VerbalStage() {
 
   function handleFinal() {
     console.log("✅ Final triggered");
+    // Set the flag so that the onstop callback will treat the recording as final.
     recordingFinalNow.current = true;
     if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
       vadInstanceRef.current.stop();
@@ -108,9 +116,12 @@ function VerbalStage() {
     } else {
       console.warn("⚠️ VAD stop function not available");
     }
+    // If a recording is active, stop it so that the onstop callback sends the final file.
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.stop();
     } else {
+      // If no active recording (for example, if speech already ended),
+      // start a fallback short final recording.
       console.warn("⚠️ No active recording; capturing short final clip");
       startFinalRecording();
     }
@@ -136,12 +147,12 @@ function VerbalStage() {
     };
     mediaRecorderRef.current = recorder;
     recorder.start();
-    // Reduced timeout to 500 ms to minimize delay.
+    // Use a fallback recording duration (3000ms) for a final clip if no active recording.
     setTimeout(() => {
       if (recorder.state === 'recording') {
         recorder.stop();
       }
-    }, 500);
+    }, 3000);
   }
 
   return (
