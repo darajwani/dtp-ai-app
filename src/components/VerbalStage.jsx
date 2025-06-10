@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-export default function VerbalStage() {
+function VerbalStage() {
   const [transcript, setTranscript] = useState('');
   const [micActive, setMicActive] = useState(false);
   const mediaRecorderRef = useRef(null);
@@ -16,40 +16,37 @@ export default function VerbalStage() {
         console.error("❌ MicVAD not found");
         return;
       }
-      
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      
       const vadInstance = await vad.MicVAD.new({
         onSpeechStart: () => {
           console.log("🗣️ Speech detected!");
           if (mediaRecorderRef.current?.state === 'recording') return;
-          
+
           chunkBufferRef.current = [];
           setMicActive(true);
-          
+
           const recorder = new MediaRecorder(stream, {
             mimeType: 'audio/webm;codecs=opus',
           });
-          
           recorder.ondataavailable = (e) => {
-            if (e.data.size > 0) chunkBufferRef.current.push(e.data);
+            if (e.data.size > 0) {
+              chunkBufferRef.current.push(e.data);
+            }
           };
-          
           recorder.onstop = () => {
             setMicActive(false);
             if (chunkBufferRef.current.length === 0) {
               console.warn("⚠️ No audio recorded, skipping submission.");
               return;
             }
-            
             const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
+            // Choose filename based on the final flag.
             const filename = recordingFinalNow.current ? 'verbal-final.webm' : 'verbal-fragment.webm';
             recordingFinalNow.current = false;
             console.log(`📤 Sending file: ${filename}`);
             sendToTranscription(blob, filename);
           };
-          
           mediaRecorderRef.current = recorder;
           recorder.start();
         },
@@ -64,13 +61,12 @@ export default function VerbalStage() {
         positiveSpeechThreshold: 0.5,
         negativeSpeechThreshold: 0.3,
       });
-      
       vadInstanceRef.current = vadInstance;
       await vadInstance.start();
     }
-    
+
     startVAD();
-    
+
     return () => {
       if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
         vadInstanceRef.current.stop();
@@ -78,7 +74,7 @@ export default function VerbalStage() {
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
-  
+
   async function sendToTranscription(blob, filename) {
     const formData = new FormData();
     formData.append('file', blob, filename);
@@ -87,7 +83,6 @@ export default function VerbalStage() {
         method: 'POST',
         body: formData,
       });
-      
       console.log("✅ File sent, response status:", res.status);
       const raw = await res.text();
       console.log("🔍 Raw response:", raw);
@@ -96,25 +91,23 @@ export default function VerbalStage() {
         return;
       }
       const json = JSON.parse(raw);
-      // Assuming Make.com now returns plain text in json.reply
+      // Assuming your Make.com response now sends plain text in json.reply.
       const replyText = json.reply.trim();
       setTranscript(prev => prev + `\n\n📋 Feedback:\n${replyText}`);
     } catch (err) {
       console.error("❌ Transcription error:", err);
     }
   }
-  
+
   function handleFinal() {
     console.log("✅ Final triggered");
     recordingFinalNow.current = true;
-    
     if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
       vadInstanceRef.current.stop();
       console.log("🎤 VAD successfully stopped after Final");
     } else {
       console.warn("⚠️ VAD stop function not available");
     }
-    
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.stop();
     } else {
@@ -122,14 +115,16 @@ export default function VerbalStage() {
       startFinalRecording();
     }
   }
-  
+
   function startFinalRecording() {
     chunkBufferRef.current = [];
     const recorder = new MediaRecorder(streamRef.current, {
       mimeType: 'audio/webm;codecs=opus',
     });
     recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunkBufferRef.current.push(e.data);
+      if (e.data.size > 0) {
+        chunkBufferRef.current.push(e.data);
+      }
     };
     recorder.onstop = () => {
       if (chunkBufferRef.current.length === 0) {
@@ -141,22 +136,21 @@ export default function VerbalStage() {
     };
     mediaRecorderRef.current = recorder;
     recorder.start();
-    
-    // Reduced final recording duration to 500ms to minimize delay.
+    // Reduced timeout to 500 ms to minimize delay.
     setTimeout(() => {
-      if (recorder.state === 'recording') recorder.stop();
+      if (recorder.state === 'recording') {
+        recorder.stop();
+      }
     }, 500);
   }
-  
+
   return (
     <div className="bg-yellow-100 min-h-screen p-6 space-y-6">
       <h2 className="text-2xl font-bold text-yellow-800">🟡 Stage 4 – Verbal Presentation</h2>
-      
       <div className="flex items-center space-x-3">
         <div className={`w-4 h-4 rounded-full ${micActive ? 'bg-red-500 animate-ping' : 'bg-gray-300'}`}></div>
         <p>{micActive ? '🎙️ Listening… Speak now' : 'Waiting for speech…'}</p>
       </div>
-      
       <div className="flex space-x-4">
         <button
           onClick={() => {
@@ -176,7 +170,6 @@ export default function VerbalStage() {
           📤 Send as Final (Test)
         </button>
       </div>
-      
       {transcript && (
         <div className="bg-white p-4 rounded shadow">
           <h3 className="font-semibold mb-2">📝 Transcript / Feedback</h3>
