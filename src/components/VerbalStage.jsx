@@ -44,7 +44,8 @@ export default function VerbalStage() {
 
             const filename = recordingFinalNow.current ? 'verbal-final.webm' : 'verbal-fragment.webm';
             recordingFinalNow.current = false;
-            sendToTranscription(blob, filename);
+           const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
+sendToTranscription(blob, filename);
           };
 
           mediaRecorderRef.current = recorder;
