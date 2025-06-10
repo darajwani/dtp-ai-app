@@ -6,7 +6,7 @@ function VerbalStage() {
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunkBufferRef = useRef([]);
-  // This flag tells the onstop callback whether to label the recording as final.
+  // This flag indicates if the final file should be generated.
   const recordingFinalNow = useRef(false);
   const vadInstanceRef = useRef(null);
 
@@ -17,6 +17,7 @@ function VerbalStage() {
         console.error("❌ MicVAD not found");
         return;
       }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
@@ -44,9 +45,9 @@ function VerbalStage() {
               return;
             }
             const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-            // If the final flag is true, use the final filename; otherwise, use the fragment.
+            // If the final flag is true, send the file as final; otherwise, as a fragment.
             const filename = recordingFinalNow.current ? 'verbal-final.webm' : 'verbal-fragment.webm';
-            // Reset the flag immediately after sending.
+            // Reset the flag.
             recordingFinalNow.current = false;
             console.log(`📤 Sending file: ${filename}`);
             sendToTranscription(blob, filename);
@@ -56,8 +57,7 @@ function VerbalStage() {
         },
         onSpeechEnd: () => {
           console.log("🔇 Speech ended.");
-          // IMPORTANT: If final mode has been triggered,
-          // skip the automatic stopping so that the final button can stop the recording.
+          // If we're not in final mode, stop automatically.
           if (!recordingFinalNow.current && mediaRecorderRef.current?.state === 'recording') {
             mediaRecorderRef.current.stop();
           }
@@ -93,14 +93,22 @@ function VerbalStage() {
       console.log("✅ File sent, response status:", res.status);
       const raw = await res.text();
       console.log("🔍 Raw response:", raw);
+
       if (!raw.trim().startsWith('{')) {
         console.error("❌ Transcription not JSON:", raw);
         return;
       }
+
       const json = JSON.parse(raw);
-      // Assuming your Make.com response now sends plain text in json.reply.
-      const replyText = json.reply.trim();
-      setTranscript(prev => prev + `\n\n📋 Feedback:\n${replyText}`);
+      let decoded;
+      try {
+        // Decode the base64-encoded reply.
+        decoded = atob(json.reply).trim();
+      } catch (e) {
+        console.warn("Base64 decoding failed; using raw reply.", e);
+        decoded = json.reply.trim();
+      }
+      setTranscript(prev => prev + `\n\n📋 Feedback:\n${decoded}`);
     } catch (err) {
       console.error("❌ Transcription error:", err);
     }
@@ -108,20 +116,18 @@ function VerbalStage() {
 
   function handleFinal() {
     console.log("✅ Final triggered");
-    // Set the flag so that the onstop callback will treat the recording as final.
     recordingFinalNow.current = true;
+
     if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
       vadInstanceRef.current.stop();
       console.log("🎤 VAD successfully stopped after Final");
     } else {
       console.warn("⚠️ VAD stop function not available");
     }
-    // If a recording is active, stop it so that the onstop callback sends the final file.
     if (mediaRecorderRef.current?.state === 'recording') {
+      // Stop the current recording so the onstop callback sends the final file.
       mediaRecorderRef.current.stop();
     } else {
-      // If no active recording (for example, if speech already ended),
-      // start a fallback short final recording.
       console.warn("⚠️ No active recording; capturing short final clip");
       startFinalRecording();
     }
@@ -147,7 +153,7 @@ function VerbalStage() {
     };
     mediaRecorderRef.current = recorder;
     recorder.start();
-    // Use a fallback recording duration (3000ms) for a final clip if no active recording.
+    // Fallback: record for 3000ms if no active recording is present.
     setTimeout(() => {
       if (recorder.state === 'recording') {
         recorder.stop();
