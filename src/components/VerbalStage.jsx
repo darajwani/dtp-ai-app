@@ -82,6 +82,14 @@ function VerbalStage() {
     };
   }, []);
 
+  function isBase64(str) {
+    try {
+      return btoa(atob(str)) === str;
+    } catch {
+      return false;
+    }
+  }
+
   async function sendToTranscription(blob, filename) {
     const formData = new FormData();
     formData.append('file', blob, filename);
@@ -93,7 +101,6 @@ function VerbalStage() {
       });
 
       console.log("✅ File sent, response status:", res.status);
-
       const json = await res.json();
       console.log("📦 JSON response received:", json);
 
@@ -102,8 +109,13 @@ function VerbalStage() {
         return;
       }
 
-      const decoded = json.reply.trim();
-      console.log("🧪 Final decoded reply:", decoded);
+      let decoded = json.reply.trim();
+      if (isBase64(decoded)) {
+        decoded = atob(decoded).trim();
+        console.log("🧪 Base64 decoded reply:", decoded);
+      } else {
+        console.log("🧾 Plain reply (no decoding needed):", decoded);
+      }
 
       setTranscript(prev => prev + `\n\n📋 Feedback:\n${decoded}`);
     } catch (err) {
