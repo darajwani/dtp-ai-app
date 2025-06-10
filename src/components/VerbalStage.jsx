@@ -7,7 +7,7 @@ export default function VerbalStage() {
   const streamRef = useRef(null);
   const chunkBufferRef = useRef([]);
   const recordingFinalNow = useRef(false);
-  const vadInstanceRef = useRef(null); // Store VAD instance for stopping later
+  const vadInstanceRef = useRef(null);
 
   useEffect(() => {
     async function startVAD() {
@@ -38,8 +38,13 @@ export default function VerbalStage() {
           recorder.onstop = () => {
             setMicActive(false);
             const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-            const isFinal = recordingFinalNow.current;
-            const filename = isFinal ? 'verbal-final.webm' : 'verbal-fragment.webm';
+            
+            if (chunkBufferRef.current.length === 0) {
+              console.warn("⚠️ No audio recorded, skipping submission.");
+              return;
+            }
+
+            const filename = recordingFinalNow.current ? 'verbal-final.webm' : 'verbal-fragment.webm';
             recordingFinalNow.current = false;
             sendToTranscription(blob, filename);
           };
@@ -103,7 +108,6 @@ export default function VerbalStage() {
   function handleFinal() {
     console.log("✅ Final triggered");
 
-    // Stop VAD if available
     if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
       vadInstanceRef.current.stop();
       console.log("🎤 Mic and VAD fully stopped after Final");
@@ -128,6 +132,11 @@ export default function VerbalStage() {
       };
 
       recorder.onstop = () => {
+        if (chunkBufferRef.current.length === 0) {
+          console.warn("⚠️ No audio recorded, skipping submission.");
+          return;
+        }
+        
         const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
         sendToTranscription(blob, 'verbal-final.webm');
       };
@@ -137,7 +146,7 @@ export default function VerbalStage() {
 
       setTimeout(() => {
         if (recorder.state === 'recording') recorder.stop();
-      }, 1000); // 1 second final capture
+      }, 1000);
     }
   }
 
