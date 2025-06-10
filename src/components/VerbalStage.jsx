@@ -82,14 +82,6 @@ function VerbalStage() {
     };
   }, []);
 
-  function isBase64(str) {
-    try {
-      return btoa(atob(str)) === str;
-    } catch {
-      return false;
-    }
-  }
-
   async function sendToTranscription(blob, filename) {
     const formData = new FormData();
     formData.append('file', blob, filename);
@@ -109,12 +101,13 @@ function VerbalStage() {
         return;
       }
 
-      let decoded = json.reply.trim();
-      if (isBase64(decoded)) {
-        decoded = atob(decoded).trim();
+      let decoded;
+      try {
+        decoded = atob(json.reply).trim();
         console.log("🧪 Base64 decoded reply:", decoded);
-      } else {
-        console.log("🧾 Plain reply (no decoding needed):", decoded);
+      } catch (e) {
+        console.warn("⚠️ Base64 decoding failed, using raw fallback.", e);
+        decoded = json.reply.trim();
       }
 
       setTranscript(prev => prev + `\n\n📋 Feedback:\n${decoded}`);
