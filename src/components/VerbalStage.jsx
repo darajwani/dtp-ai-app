@@ -8,6 +8,7 @@ function VerbalStage() {
   const chunkBufferRef = useRef([]);
   const recordingFinalNow = useRef(false);
   const vadInstanceRef = useRef(null);
+  const longRouteTriggered = useRef(false); // ✅ New flag to control short route
 
   useEffect(() => {
     async function startVAD() {
@@ -47,10 +48,8 @@ function VerbalStage() {
 
             const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
             const filename = recordingFinalNow.current ? 'verbal-final.webm' : 'verbal-fragment.webm';
-            recordingFinalNow.current = false;
-
-            console.log(`📤 Sending file: ${filename}`);
             sendToTranscription(blob, filename);
+            recordingFinalNow.current = false;
           };
 
           mediaRecorderRef.current = recorder;
@@ -93,45 +92,40 @@ function VerbalStage() {
     formData.append('file', blob, filename);
 
     try {
-      const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
+      const res = await fetch('https://hook.eu2.make.com/your-webhook-url', {
         method: 'POST',
         body: formData,
       });
 
-      console.log("✅ File sent, response status:", res.status);
       const json = await res.json();
       console.log("📦 JSON response received:", json);
 
       if (!json.reply) {
-        console.error("❌ No 'reply' field in response");
+        console.warn("⚠️ No 'reply' field in response");
         return;
       }
 
-      const raw = json.reply.trim();
-      let decoded = raw;
-      let fallback = false;
-
-      if (isBase64(raw)) {
-        decoded = atob(raw).trim();
-        console.log("🔓 Base64 decoded:", decoded);
-      } else {
-        fallback = true;
-        console.log("🧾 No decoding applied, plain response:", decoded);
+      if (longRouteTriggered.current && json.route === 'short') {
+        console.log("⏭️ Ignoring short reply due to long feedback trigger");
+        return;
       }
 
-      setTranscript(prev =>
-        prev + `\n\n📋 ${fallback ? 'Raw Response' : 'Feedback'}:\n${decoded}`
-      );
+      let decoded = json.reply.trim();
+      if (isBase64(decoded)) {
+        decoded = atob(decoded).trim();
+        console.log("🔓 Base64-decoded:", decoded);
+      }
+
+      setTranscript(prev => prev + `\n\n📋 Feedback:\n${decoded}`);
     } catch (err) {
-      console.error("❌ Transcription error:", err);
-      setTranscript(prev => prev + `\n\n⚠️ Error retrieving feedback.`);
+      console.error("❌ Error submitting for transcription:", err);
     }
   }
 
   function handleFinal() {
     console.log("✅ Final triggered");
+    longRouteTriggered.current = true; // ✅ Prevent future short replies
     recordingFinalNow.current = true;
-
     vadInstanceRef.current?.stop?.();
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.stop();
@@ -153,11 +147,6 @@ function VerbalStage() {
     };
 
     recorder.onstop = () => {
-      if (chunkBufferRef.current.length === 0) {
-        console.warn("⚠️ No audio recorded, skipping submission.");
-        return;
-      }
-
       const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
       sendToTranscription(blob, 'verbal-final.webm');
     };
@@ -182,21 +171,15 @@ function VerbalStage() {
       </div>
 
       <div className="flex space-x-4">
-        <button
-          onClick={() => {
-            if (mediaRecorderRef.current?.state === 'recording') {
-              mediaRecorderRef.current.stop();
-              console.log("⏹️ Force stop triggered");
-            }
-          }}
-          className="bg-red-200 text-red-800 px-4 py-1 rounded"
-        >
+        <button onClick={() => {
+          if (mediaRecorderRef.current?.state === 'recording') {
+            mediaRecorderRef.current.stop();
+            console.log("⏹️ Force stop triggered");
+          }
+        }} className="bg-red-200 text-red-800 px-4 py-1 rounded">
           ⏹️ Force Stop
         </button>
-        <button
-          onClick={handleFinal}
-          className="bg-green-200 text-green-800 px-4 py-1 rounded"
-        >
+        <button onClick={handleFinal} className="bg-green-200 text-green-800 px-4 py-1 rounded">
           📤 Send as Final (Test)
         </button>
       </div>
