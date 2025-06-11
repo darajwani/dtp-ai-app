@@ -47,10 +47,17 @@ function VerbalStage() {
 
             const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
             const filename = recordingFinalNow.current ? 'verbal-final.webm' : 'verbal-fragment.webm';
-            recordingFinalNow.current = false;
 
             console.log(`📤 Sending file: ${filename}`);
             sendToTranscription(blob, filename);
+
+            // Stop VAD after final is sent
+            if (recordingFinalNow.current && vadInstanceRef.current?.stop) {
+              vadInstanceRef.current.stop();
+              console.log("🎤 VAD stopped after final speech ended");
+            }
+
+            recordingFinalNow.current = false;
           };
 
           mediaRecorderRef.current = recorder;
@@ -58,7 +65,7 @@ function VerbalStage() {
         },
         onSpeechEnd: () => {
           console.log("🔇 Speech ended.");
-          if (!recordingFinalNow.current && mediaRecorderRef.current?.state === 'recording') {
+          if (mediaRecorderRef.current?.state === 'recording') {
             mediaRecorderRef.current.stop();
           }
         },
@@ -129,14 +136,7 @@ function VerbalStage() {
     console.log("✅ Final triggered");
     recordingFinalNow.current = true;
 
-    if (vadInstanceRef.current?.stop) {
-      vadInstanceRef.current.stop();
-      console.log("🎤 VAD successfully stopped after Final");
-    }
-
-    if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    } else {
+    if (mediaRecorderRef.current?.state !== 'recording') {
       console.warn("⚠️ No active recording; capturing short final clip");
       startFinalRecording();
     }
