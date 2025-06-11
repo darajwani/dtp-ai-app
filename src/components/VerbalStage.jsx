@@ -6,9 +6,9 @@ function VerbalStage() {
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunkBufferRef = useRef([]);
-  const allChunksRef = useRef([]); // ✅ Store all short fragments
+  const allChunksRef = useRef([]); // Store all short fragments
   const recordingFinalNow = useRef(false);
-  const recordingEndedRef = useRef(false); // ✅ Prevent new recordings after final
+  const recordingEndedRef = useRef(false); // Prevent new recordings after final
   const vadInstanceRef = useRef(null);
 
   useEffect(() => {
@@ -24,7 +24,7 @@ function VerbalStage() {
 
       const vadInstance = await vad.MicVAD.new({
         onSpeechStart: () => {
-          if (recordingEndedRef.current) return; // ✅ Stop VAD after final
+          if (recordingEndedRef.current) return;
           console.log("🗣️ Speech detected!");
           if (mediaRecorderRef.current?.state === 'recording') return;
 
@@ -50,7 +50,6 @@ function VerbalStage() {
 
             const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
 
-            // ✅ Accumulate all non-final chunks
             if (!recordingFinalNow.current) {
               allChunksRef.current.push(blob);
             }
@@ -76,12 +75,11 @@ function VerbalStage() {
         onSpeechEnd: () => {
           console.log("🔇 Speech ended.");
           if (mediaRecorderRef.current?.state === 'recording') {
-            // ✅ Add slight delay to prevent cutoff from breathing
             setTimeout(() => {
               if (mediaRecorderRef.current?.state === 'recording') {
                 mediaRecorderRef.current.stop();
               }
-            }, 300);
+            }, 300); // brief delay to prevent cutoff from breathing
           }
         },
         modelURL: '/vad/silero_vad.onnx',
@@ -125,25 +123,30 @@ function VerbalStage() {
       console.log("📦 JSON response received:", json);
 
       if (!json.reply) {
-        console.error("❌ No 'reply' field in response");
-
+        console.error("❌ No 'reply' field in response for file:", filename);
+        const label = filename === 'verbal-final.webm' ? '🟢 Final Feedback:' : '📋 Feedback:';
         const fallbackReplies = ["Okay.", "Got it.", "Sure.", "Alright.", "Noted."];
         const randomShort = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
-        setTranscript(prev => prev + `\n\n📋 Feedback:\n${randomShort}`);
+        setTranscript(prev => prev + `\n\n${label}\n${randomShort}`);
         return;
       }
 
       let decoded = json.reply.trim();
-      if (isBase64(decoded)) {
-        decoded = atob(decoded).trim();
-        console.log("🧪 Base64 decoded reply:", decoded);
-      } else {
-        console.log("🧾 Plain reply (no decoding needed):", decoded);
+      try {
+        const decodedCandidate = atob(decoded);
+        const isMostlyText = /^[\x20-\x7E\r\n\t]+$/.test(decodedCandidate.trim());
+        if (isMostlyText) {
+          decoded = decodedCandidate.trim();
+          console.log("🧪 Base64 decoded reply:", decoded);
+        } else {
+          console.log("🧾 Using original reply (not cleanly decodable)");
+        }
+      } catch {
+        console.log("🧾 Not Base64 or failed decoding, using raw reply");
       }
 
       const route = json.route?.toLowerCase() || 'short';
       const label = route === 'long' ? '🟢 Final Feedback:' : '📋 Feedback:';
-
       setTranscript(prev => prev + `\n\n${label}\n${decoded}`);
     } catch (err) {
       console.error("❌ Transcription error:", err);
@@ -156,18 +159,16 @@ function VerbalStage() {
     recordingFinalNow.current = true;
 
     if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.stop(); // finish active speech
+      mediaRecorderRef.current.stop();
     } else {
       if (allChunksRef.current.length > 0) {
         const finalBlob = new Blob(allChunksRef.current, { type: 'audio/webm' });
         sendToTranscription(finalBlob, 'verbal-final.webm');
         recordingEndedRef.current = true;
-        if (vadInstanceRef.current?.stop) {
-          vadInstanceRef.current.stop();
-        }
+        if (vadInstanceRef.current?.stop) vadInstanceRef.current.stop();
         console.log("📤 Final combined audio sent (no live speech)");
       } else {
-        console.warn("⚠️ No audio chunks available to combine");
+        alert("⚠️ No audio detected to send as final.");
       }
     }
   }
@@ -236,9 +237,9 @@ function VerbalStage() {
       </div>
 
       {transcript && (
-        <div className="bg-white p-4 rounded shadow">
+        <div className="bg-white p-4 rounded shadow overflow-x-hidden">
           <h3 className="font-semibold mb-2">📝 Transcript / Feedback</h3>
-          <pre className="whitespace-pre-wrap text-gray-800">{transcript}</pre>
+          <pre className="whitespace-pre-wrap break-words text-gray-800">{transcript}</pre>
         </div>
       )}
     </div>
