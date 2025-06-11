@@ -111,28 +111,22 @@ function VerbalStage() {
 
       let decoded = json.reply.trim();
 
-      try {
-        if (isBase64(decoded)) {
-          decoded = atob(decoded).trim();
-          console.log("🔍 Raw base64-decoded:", decoded);
+      if (isBase64(decoded)) {
+        decoded = atob(decoded).trim();
+        console.log("🔍 Raw base64-decoded:", decoded);
 
-          if (decoded.startsWith('{') && decoded.endsWith('}')) {
-            const parsed = JSON.parse(decoded);
-            if (parsed.reply) {
-              decoded = parsed.reply.trim();
-              console.log("✅ Extracted reply from nested JSON:", decoded);
-            }
+        try {
+          const parsed = JSON.parse(decoded);
+          if (parsed?.reply) {
+            decoded = parsed.reply;
+            console.log("✅ Extracted from JSON:", decoded);
           }
-        } else {
-          console.log("🧾 Plain reply (no decoding needed):", decoded);
+        } catch {
+          // not JSON, keep as is
         }
-
-        setTranscript(prev => prev + `\n📋 Feedback:\n${decoded}`);
-      } catch (err) {
-        console.error("⚠️ Decoding or parsing error:", err);
-        setTranscript(prev => prev + `\n⚠️ Error decoding feedback.`);
       }
 
+      setTranscript(prev => prev + `\n\n📋 Feedback:\n${decoded}`);
     } catch (err) {
       console.error("❌ Transcription error:", err);
       setTranscript(prev => prev + `\n\n⚠️ Error retrieving feedback.`);
