@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import useVAD from '../vadHandler'; // Copy from Stage 4
-import { speakText } from '../ttsHandler'; // Copy from OSCE module
+import { useVAD } from './vadHandler'; // new file below
+import { speakText } from './ttsHandler'; // new file below
 
 export default function Stage1_History() {
   const navigate = useNavigate();
-  const [scenarioId, setScenarioId] = useState('DTP-001');
+  const [scenarioId] = useState('DTP-001');
   const [showTimeUp, setShowTimeUp] = useState(false);
   const [timerId, setTimerId] = useState(null);
 
@@ -26,17 +26,18 @@ export default function Stage1_History() {
     }
   };
 
-  const { startVAD, stopVAD, resetVAD } = useVAD(onSpeechEnd);
+  const { start, stop, reset } = useVAD(onSpeechEnd);
 
   useEffect(() => {
-    startVAD();
+    start();
     const id = setTimeout(() => {
       setShowTimeUp(true);
       setTimeout(() => navigate('/stage2'), 1000);
     }, 10 * 60 * 1000);
     setTimerId(id);
+
     return () => {
-      stopVAD();
+      stop();
       clearTimeout(id);
     };
   }, []);
@@ -50,13 +51,13 @@ export default function Stage1_History() {
       method: 'POST',
       body: fakeForm,
     })
-      .then((res) => res.json())
-      .then((data) => data.reply && speakText(data.reply))
-      .catch((err) => console.error('Test error:', err));
+      .then(res => res.json())
+      .then(data => data.reply && speakText(data.reply))
+      .catch(err => console.error('Test error:', err));
   };
 
   const handleStop = () => {
-    resetVAD();
+    reset();
     clearTimeout(timerId);
     navigate('/stage1');
   };
@@ -66,8 +67,8 @@ export default function Stage1_History() {
       <h1 className="text-xl font-bold mb-4">🟦 Stage 1 – History Taking</h1>
       {showTimeUp && <div className="text-red-600 font-bold mb-4">⏰ Time's Up!</div>}
       <div className="flex gap-4">
-        <button onClick={handleTest} className="bg-blue-500 text-white px-4 py-2 rounded">Test</button>
-        <button onClick={handleStop} className="bg-red-500 text-white px-4 py-2 rounded">Stop & Restart</button>
+        <button onClick={handleTest} className="bg-blue-600 text-white px-4 py-2 rounded">Test</button>
+        <button onClick={handleStop} className="bg-red-600 text-white px-4 py-2 rounded">Stop & Restart</button>
       </div>
     </div>
   );
