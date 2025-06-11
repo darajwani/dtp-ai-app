@@ -117,14 +117,10 @@ function VerbalStage() {
         console.log("🧾 Plain reply (no decoding needed):", decoded);
       }
 
-      const isFinal = decoded.toLowerCase().includes("long feedback triggered");
+      const isFinal = decoded.toLowerCase().includes("long feedback triggered") || filename.includes("final");
+      decoded = decoded.replace(/long feedback triggered/i, '').trim();
 
-      if (isFinal) {
-        decoded = decoded.replace(/long feedback triggered/i, '').trim();
-        setTranscript(prev => prev + `\n\n🟢 Final Feedback:\n${decoded}`);
-      } else {
-        setTranscript(prev => prev + `\n\n📋 Feedback:\n${decoded}`);
-      }
+      setTranscript(prev => prev + `\n\n${isFinal ? '🟢 Final Feedback' : '📋 Feedback'}:\n${decoded}`);
     } catch (err) {
       console.error("❌ Transcription error:", err);
       setTranscript(prev => prev + `\n\n⚠️ Error retrieving feedback.`);
