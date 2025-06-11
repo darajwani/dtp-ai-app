@@ -48,7 +48,6 @@ function VerbalStage() {
             const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
             const filename = recordingFinalNow.current ? 'verbal-final.webm' : 'verbal-fragment.webm';
             recordingFinalNow.current = false;
-
             console.log(`📤 Sending file: ${filename}`);
             sendToTranscription(blob, filename);
           };
@@ -75,10 +74,29 @@ function VerbalStage() {
     startVAD();
 
     return () => {
-      if (vadInstanceRef.current?.stop) vadInstanceRef.current.stop();
-      streamRef.current?.getTracks().forEach(track => track.stop());
+      if (vadInstanceRef.current?.stop) {
+        vadInstanceRef.current.stop();
+      }
+      streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
+
+  function safeDecodeReply(base64String) {
+    try {
+      const decoded = atob(base64String);
+      console.log("🔍 Raw base64-decoded:", decoded);
+
+      // Try parsing if the decoded value looks like JSON
+      if (decoded.trim().startsWith('{')) {
+        const parsed = JSON.parse(decoded);
+        return parsed.reply || decoded;
+      }
+      return decoded;
+    } catch (err) {
+      console.warn("⚠️ Base64 or JSON decoding failed, fallback to raw:", err);
+      return base64String;
+    }
+  }
 
   async function sendToTranscription(blob, filename) {
     const formData = new FormData();
@@ -99,24 +117,8 @@ function VerbalStage() {
         return;
       }
 
-      let decoded;
-      try {
-        const rawDecoded = atob(json.reply);
-        console.log("🔍 Raw base64-decoded:", rawDecoded);
-        const parsed = JSON.parse(rawDecoded);
-        decoded = parsed.reply || rawDecoded;
-        console.log("🧪 Parsed decoded content:", decoded);
-      } catch (e) {
-        console.warn("⚠️ Base64 or JSON decoding failed, using fallback.", e);
-        decoded = json.reply.trim();
-      }
-
-      if (!decoded || decoded.length < 3) {
-        console.warn("⚠️ Decoded reply is empty or invalid.");
-        return;
-      }
-
-      setTranscript(prev => prev + `\n\n📋 Feedback:\n${decoded}`);
+      const finalFeedback = safeDecodeReply(json.reply);
+      setTranscript(prev => prev + `\n\n📋 Feedback:\n${finalFeedback}`);
     } catch (err) {
       console.error("❌ Transcription error:", err);
       setTranscript(prev => prev + `\n\n⚠️ Error retrieving feedback.`);
@@ -202,9 +204,9 @@ function VerbalStage() {
       </div>
 
       {transcript && (
-        <div className="bg-white p-4 rounded shadow whitespace-pre-wrap text-gray-800">
+        <div className="bg-white p-4 rounded shadow">
           <h3 className="font-semibold mb-2">📝 Transcript / Feedback</h3>
-          <div>{transcript}</div>
+          <pre className="whitespace-pre-wrap text-gray-800">{transcript}</pre>
         </div>
       )}
     </div>
