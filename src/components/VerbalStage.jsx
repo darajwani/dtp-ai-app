@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
 
 function VerbalStage() {
   const [transcript, setTranscript] = useState('');
@@ -200,11 +199,9 @@ function VerbalStage() {
       </div>
 
       {transcript && (
-        <div className="bg-white p-4 rounded shadow">
+        <div className="bg-white p-4 rounded shadow whitespace-pre-wrap text-gray-800">
           <h3 className="font-semibold mb-2">📝 Transcript / Feedback</h3>
-          <ReactMarkdown className="prose prose-sm text-gray-800 whitespace-pre-wrap">
-            {transcript}
-          </ReactMarkdown>
+          <div>{transcript}</div>
         </div>
       )}
     </div>
