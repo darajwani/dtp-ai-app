@@ -7,6 +7,7 @@ function VerbalStage() {
   const streamRef = useRef(null);
   const chunkBufferRef = useRef([]);
   const recordingFinalNow = useRef(false);
+  const recordingEndedRef = useRef(false); // ✅ New flag to block future speech
   const vadInstanceRef = useRef(null);
 
   useEffect(() => {
@@ -22,6 +23,7 @@ function VerbalStage() {
 
       const vadInstance = await vad.MicVAD.new({
         onSpeechStart: () => {
+          if (recordingEndedRef.current) return; // ✅ Block new speech after final
           console.log("🗣️ Speech detected!");
           if (mediaRecorderRef.current?.state === 'recording') return;
 
@@ -51,10 +53,10 @@ function VerbalStage() {
             console.log(`📤 Sending file: ${filename}`);
             sendToTranscription(blob, filename);
 
-            // Stop VAD after final is sent
-            if (recordingFinalNow.current && vadInstanceRef.current?.stop) {
-              vadInstanceRef.current.stop();
+            if (recordingFinalNow.current) {
+              if (vadInstanceRef.current?.stop) vadInstanceRef.current.stop();
               console.log("🎤 VAD stopped after final speech ended");
+              recordingEndedRef.current = true; // ✅ Permanently stop recording
             }
 
             recordingFinalNow.current = false;
@@ -162,6 +164,7 @@ function VerbalStage() {
 
       const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
       sendToTranscription(blob, 'verbal-final.webm');
+      recordingEndedRef.current = true; // ✅ Prevent further detection
     };
 
     mediaRecorderRef.current = recorder;
