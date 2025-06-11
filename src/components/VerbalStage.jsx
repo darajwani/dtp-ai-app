@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 function VerbalStage() {
   const [transcript, setTranscript] = useState('');
@@ -75,10 +76,8 @@ function VerbalStage() {
     startVAD();
 
     return () => {
-      if (vadInstanceRef.current?.stop) {
-        vadInstanceRef.current.stop();
-      }
-      streamRef.current?.getTracks().forEach((track) => track.stop());
+      if (vadInstanceRef.current?.stop) vadInstanceRef.current.stop();
+      streamRef.current?.getTracks().forEach(track => track.stop());
     };
   }, []);
 
@@ -108,6 +107,11 @@ function VerbalStage() {
       } catch (e) {
         console.warn("⚠️ Base64 decoding failed, using raw fallback.", e);
         decoded = json.reply.trim();
+      }
+
+      if (!decoded || decoded.length < 3) {
+        console.warn("⚠️ Decoded reply is empty or invalid.");
+        return;
       }
 
       setTranscript(prev => prev + `\n\n📋 Feedback:\n${decoded}`);
@@ -198,7 +202,9 @@ function VerbalStage() {
       {transcript && (
         <div className="bg-white p-4 rounded shadow">
           <h3 className="font-semibold mb-2">📝 Transcript / Feedback</h3>
-          <pre className="whitespace-pre-wrap text-gray-800">{transcript}</pre>
+          <ReactMarkdown className="prose prose-sm text-gray-800 whitespace-pre-wrap">
+            {transcript}
+          </ReactMarkdown>
         </div>
       )}
     </div>
