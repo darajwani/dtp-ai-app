@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 function VerbalStage() {
   const [transcript, setTranscript] = useState('');
   const [micActive, setMicActive] = useState(false);
-  const [finalTriggered, setFinalTriggered] = useState(false);
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunkBufferRef = useRef([]);
@@ -25,11 +24,6 @@ function VerbalStage() {
         onSpeechStart: () => {
           console.log("🗣️ Speech detected!");
           if (mediaRecorderRef.current?.state === 'recording') return;
-
-          if (finalTriggered) {
-            console.warn("🚫 Ignoring short input after final triggered.");
-            return;
-          }
 
           chunkBufferRef.current = [];
           setMicActive(true);
@@ -123,8 +117,14 @@ function VerbalStage() {
         console.log("🧾 Plain reply (no decoding needed):", decoded);
       }
 
-      const label = filename.includes('final') ? '🟢 Final Feedback' : '📋 Feedback';
-      setTranscript(prev => prev + `\n\n${label}:\n${decoded}`);
+      const isFinal = decoded.toLowerCase().includes("long feedback triggered");
+
+      if (isFinal) {
+        decoded = decoded.replace(/long feedback triggered/i, '').trim();
+        setTranscript(prev => prev + `\n\n🟢 Final Feedback:\n${decoded}`);
+      } else {
+        setTranscript(prev => prev + `\n\n📋 Feedback:\n${decoded}`);
+      }
     } catch (err) {
       console.error("❌ Transcription error:", err);
       setTranscript(prev => prev + `\n\n⚠️ Error retrieving feedback.`);
@@ -134,7 +134,6 @@ function VerbalStage() {
   function handleFinal() {
     console.log("✅ Final triggered");
     recordingFinalNow.current = true;
-    setFinalTriggered(true);
 
     if (vadInstanceRef.current?.stop) {
       vadInstanceRef.current.stop();
