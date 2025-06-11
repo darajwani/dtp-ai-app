@@ -75,9 +75,7 @@ function VerbalStage() {
     startVAD();
 
     return () => {
-      if (vadInstanceRef.current?.stop) {
-        vadInstanceRef.current.stop();
-      }
+      if (vadInstanceRef.current?.stop) vadInstanceRef.current.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
@@ -117,10 +115,10 @@ function VerbalStage() {
         console.log("🧾 Plain reply (no decoding needed):", decoded);
       }
 
-      const isFinal = decoded.toLowerCase().includes("long feedback triggered") || filename.includes("final");
-      decoded = decoded.replace(/long feedback triggered/i, '').trim();
+      const route = json.route?.toLowerCase() || 'short';
+      const label = route === 'long' ? '🟢 Final Feedback:' : '📋 Feedback:';
 
-      setTranscript(prev => prev + `\n\n${isFinal ? '🟢 Final Feedback' : '📋 Feedback'}:\n${decoded}`);
+      setTranscript(prev => prev + `\n\n${label}\n${decoded}`);
     } catch (err) {
       console.error("❌ Transcription error:", err);
       setTranscript(prev => prev + `\n\n⚠️ Error retrieving feedback.`);
