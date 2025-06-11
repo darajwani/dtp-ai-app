@@ -48,6 +48,7 @@ function VerbalStage() {
             const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
             const filename = recordingFinalNow.current ? 'verbal-final.webm' : 'verbal-fragment.webm';
             recordingFinalNow.current = false;
+
             console.log(`📤 Sending file: ${filename}`);
             sendToTranscription(blob, filename);
           };
@@ -81,20 +82,11 @@ function VerbalStage() {
     };
   }, []);
 
-  function safeDecodeReply(base64String) {
+  function isBase64(str) {
     try {
-      const decoded = atob(base64String);
-      console.log("🔍 Raw base64-decoded:", decoded);
-
-      // Try parsing if the decoded value looks like JSON
-      if (decoded.trim().startsWith('{')) {
-        const parsed = JSON.parse(decoded);
-        return parsed.reply || decoded;
-      }
-      return decoded;
-    } catch (err) {
-      console.warn("⚠️ Base64 or JSON decoding failed, fallback to raw:", err);
-      return base64String;
+      return btoa(atob(str)) === str;
+    } catch {
+      return false;
     }
   }
 
@@ -117,8 +109,30 @@ function VerbalStage() {
         return;
       }
 
-      const finalFeedback = safeDecodeReply(json.reply);
-      setTranscript(prev => prev + `\n\n📋 Feedback:\n${finalFeedback}`);
+      let decoded = json.reply.trim();
+
+      try {
+        if (isBase64(decoded)) {
+          decoded = atob(decoded).trim();
+          console.log("🔍 Raw base64-decoded:", decoded);
+
+          if (decoded.startsWith('{') && decoded.endsWith('}')) {
+            const parsed = JSON.parse(decoded);
+            if (parsed.reply) {
+              decoded = parsed.reply.trim();
+              console.log("✅ Extracted reply from nested JSON:", decoded);
+            }
+          }
+        } else {
+          console.log("🧾 Plain reply (no decoding needed):", decoded);
+        }
+
+        setTranscript(prev => prev + `\n📋 Feedback:\n${decoded}`);
+      } catch (err) {
+        console.error("⚠️ Decoding or parsing error:", err);
+        setTranscript(prev => prev + `\n⚠️ Error decoding feedback.`);
+      }
+
     } catch (err) {
       console.error("❌ Transcription error:", err);
       setTranscript(prev => prev + `\n\n⚠️ Error retrieving feedback.`);
