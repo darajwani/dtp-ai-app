@@ -6,8 +6,9 @@ function VerbalStage() {
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunkBufferRef = useRef([]);
+  const allChunksRef = useRef([]); // ✅ Store all short fragments
   const recordingFinalNow = useRef(false);
-  const recordingEndedRef = useRef(false); // ✅ New flag to block future speech
+  const recordingEndedRef = useRef(false); // ✅ Prevent new recordings after final
   const vadInstanceRef = useRef(null);
 
   useEffect(() => {
@@ -23,7 +24,7 @@ function VerbalStage() {
 
       const vadInstance = await vad.MicVAD.new({
         onSpeechStart: () => {
-          if (recordingEndedRef.current) return; // ✅ Block new speech after final
+          if (recordingEndedRef.current) return; // ✅ Stop VAD after final
           console.log("🗣️ Speech detected!");
           if (mediaRecorderRef.current?.state === 'recording') return;
 
@@ -48,18 +49,25 @@ function VerbalStage() {
             }
 
             const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-            const filename = recordingFinalNow.current ? 'verbal-final.webm' : 'verbal-fragment.webm';
 
+            // ✅ Accumulate all non-final chunks
+            if (!recordingFinalNow.current) {
+              allChunksRef.current.push(blob);
+            }
+
+            const filename = recordingFinalNow.current ? 'verbal-final.webm' : 'verbal-fragment.webm';
             console.log(`📤 Sending file: ${filename}`);
-            sendToTranscription(blob, filename);
+
+            if (!recordingEndedRef.current || recordingFinalNow.current) {
+              sendToTranscription(blob, filename);
+            }
 
             if (recordingFinalNow.current) {
               if (vadInstanceRef.current?.stop) vadInstanceRef.current.stop();
               console.log("🎤 VAD stopped after final speech ended");
-              recordingEndedRef.current = true; // ✅ Permanently stop recording
+              recordingEndedRef.current = true;
+              recordingFinalNow.current = false;
             }
-
-            recordingFinalNow.current = false;
           };
 
           mediaRecorderRef.current = recorder;
@@ -68,7 +76,12 @@ function VerbalStage() {
         onSpeechEnd: () => {
           console.log("🔇 Speech ended.");
           if (mediaRecorderRef.current?.state === 'recording') {
-            mediaRecorderRef.current.stop();
+            // ✅ Add slight delay to prevent cutoff from breathing
+            setTimeout(() => {
+              if (mediaRecorderRef.current?.state === 'recording') {
+                mediaRecorderRef.current.stop();
+              }
+            }, 300);
           }
         },
         modelURL: '/vad/silero_vad.onnx',
@@ -113,6 +126,10 @@ function VerbalStage() {
 
       if (!json.reply) {
         console.error("❌ No 'reply' field in response");
+
+        const fallbackReplies = ["Okay.", "Got it.", "Sure.", "Alright.", "Noted."];
+        const randomShort = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+        setTranscript(prev => prev + `\n\n📋 Feedback:\n${randomShort}`);
         return;
       }
 
@@ -138,9 +155,20 @@ function VerbalStage() {
     console.log("✅ Final triggered");
     recordingFinalNow.current = true;
 
-    if (mediaRecorderRef.current?.state !== 'recording') {
-      console.warn("⚠️ No active recording; capturing short final clip");
-      startFinalRecording();
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop(); // finish active speech
+    } else {
+      if (allChunksRef.current.length > 0) {
+        const finalBlob = new Blob(allChunksRef.current, { type: 'audio/webm' });
+        sendToTranscription(finalBlob, 'verbal-final.webm');
+        recordingEndedRef.current = true;
+        if (vadInstanceRef.current?.stop) {
+          vadInstanceRef.current.stop();
+        }
+        console.log("📤 Final combined audio sent (no live speech)");
+      } else {
+        console.warn("⚠️ No audio chunks available to combine");
+      }
     }
   }
 
@@ -162,9 +190,10 @@ function VerbalStage() {
         return;
       }
 
-      const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-      sendToTranscription(blob, 'verbal-final.webm');
-      recordingEndedRef.current = true; // ✅ Prevent further detection
+      allChunksRef.current.push(new Blob(chunkBufferRef.current, { type: 'audio/webm' }));
+      const finalBlob = new Blob(allChunksRef.current, { type: 'audio/webm' });
+      sendToTranscription(finalBlob, 'verbal-final.webm');
+      recordingEndedRef.current = true;
     };
 
     mediaRecorderRef.current = recorder;
