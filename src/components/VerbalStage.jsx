@@ -117,7 +117,8 @@ function VerbalStage() {
         console.log("🧾 Plain reply (no decoding needed):", decoded);
       }
 
-      setTranscript(prev => prev + `\n\n📋 Feedback:\n${decoded}`);
+      const label = filename.includes('final') ? '🟢 Final Feedback' : '📋 Feedback';
+      setTranscript(prev => prev + `\n\n${label}:\n${decoded}`);
     } catch (err) {
       console.error("❌ Transcription error:", err);
       setTranscript(prev => prev + `\n\n⚠️ Error retrieving feedback.`);
