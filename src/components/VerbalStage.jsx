@@ -3,13 +3,15 @@ import { useEffect, useRef, useState } from 'react';
 function VerbalStage() {
   const [transcript, setTranscript] = useState('');
   const [micActive, setMicActive] = useState(false);
+  const [timer, setTimer] = useState(600); // 10 minute timer
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunkBufferRef = useRef([]);
-  const allChunksRef = useRef([]); // Store all short fragments
+  const allChunksRef = useRef([]);
   const recordingFinalNow = useRef(false);
-  const recordingEndedRef = useRef(false); // Prevent new recordings after final
+  const recordingEndedRef = useRef(false);
   const vadInstanceRef = useRef(null);
+  const timerIntervalRef = useRef(null);
 
   useEffect(() => {
     async function startVAD() {
@@ -90,6 +92,18 @@ function VerbalStage() {
 
       vadInstanceRef.current = vadInstance;
       await vadInstance.start();
+
+      // Start countdown timer
+      timerIntervalRef.current = setInterval(() => {
+        setTimer((prev) => {
+          if (prev <= 1) {
+            clearInterval(timerIntervalRef.current);
+            handleFinal();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     }
 
     startVAD();
@@ -97,6 +111,7 @@ function VerbalStage() {
     return () => {
       if (vadInstanceRef.current?.stop) vadInstanceRef.current.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
+      clearInterval(timerIntervalRef.current);
     };
   }, []);
 
@@ -173,41 +188,53 @@ function VerbalStage() {
     }
   }
 
+  const minutes = Math.floor(timer / 60).toString().padStart(2, '0');
+  const seconds = (timer % 60).toString().padStart(2, '0');
+
   return (
-    <div className="bg-yellow-100 min-h-screen p-6 space-y-6">
-      <h2 className="text-2xl font-bold text-yellow-800">🟡 Stage 4 – Verbal Presentation</h2>
+    <div className="min-h-screen bg-gradient-to-br from-yellow-100 to-white p-6 font-sans">
+      <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-xl p-6 space-y-6">
+        <h2 className="text-3xl font-bold text-yellow-800 flex items-center gap-2">
+          <span role="img" aria-label="stage">🟡</span> Stage 4 – Verbal Presentation
+        </h2>
 
-      <div className="flex items-center space-x-3">
-        <div className={`w-4 h-4 rounded-full ${micActive ? 'bg-red-500 animate-ping' : 'bg-gray-300'}`}></div>
-        <p>{micActive ? '🎙️ Listening… Speak now' : 'Waiting for speech…'}</p>
-      </div>
-
-      <div className="flex space-x-4">
-        <button
-          onClick={() => {
-            if (mediaRecorderRef.current?.state === 'recording') {
-              mediaRecorderRef.current.stop();
-              console.log("⏹️ Force stop triggered");
-            }
-          }}
-          className="bg-red-200 text-red-800 px-4 py-1 rounded"
-        >
-          ⏹️ Force Stop
-        </button>
-        <button
-          onClick={handleFinal}
-          className="bg-green-200 text-green-800 px-4 py-1 rounded"
-        >
-          📤 Send as Final (Test)
-        </button>
-      </div>
-
-      {transcript && (
-        <div className="bg-white p-4 rounded shadow overflow-x-hidden">
-          <h3 className="font-semibold mb-2">📝 Transcript / Feedback</h3>
-          <pre className="whitespace-pre-wrap break-words text-gray-800">{transcript}</pre>
+        <div className="flex justify-between items-center">
+          <div className="flex items-center space-x-3">
+            <div className={`w-4 h-4 rounded-full ${micActive ? 'bg-red-500 animate-ping' : 'bg-gray-300'}`}></div>
+            <p className="text-lg">{micActive ? '🎙️ Listening… Speak now' : 'Waiting for speech…'}</p>
+          </div>
+          <div className="text-sm text-gray-500 font-mono">
+            ⏳ {minutes}:{seconds}
+          </div>
         </div>
-      )}
+
+        <div className="flex space-x-4">
+          <button
+            onClick={() => {
+              if (mediaRecorderRef.current?.state === 'recording') {
+                mediaRecorderRef.current.stop();
+                console.log("⏹️ Force stop triggered");
+              }
+            }}
+            className="bg-red-100 hover:bg-red-200 text-red-800 px-4 py-2 rounded shadow"
+          >
+            ⏹️ Force Stop
+          </button>
+          <button
+            onClick={handleFinal}
+            className="bg-green-100 hover:bg-green-200 text-green-800 px-4 py-2 rounded shadow"
+          >
+            📤 Send as Final (Test)
+          </button>
+        </div>
+
+        {transcript && (
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 overflow-x-auto">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">📝 Transcript / Feedback</h3>
+            <pre className="whitespace-pre-wrap break-words text-gray-700 text-base leading-relaxed">{transcript}</pre>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
