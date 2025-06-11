@@ -101,10 +101,13 @@ function VerbalStage() {
 
       let decoded;
       try {
-        decoded = atob(json.reply).trim();
-        console.log("🧪 Base64 decoded reply:", decoded);
+        const rawDecoded = atob(json.reply);
+        console.log("🔍 Raw base64-decoded:", rawDecoded);
+        const parsed = JSON.parse(rawDecoded);
+        decoded = parsed.reply || rawDecoded;
+        console.log("🧪 Parsed decoded content:", decoded);
       } catch (e) {
-        console.warn("⚠️ Base64 decoding failed, using raw fallback.", e);
+        console.warn("⚠️ Base64 or JSON decoding failed, using fallback.", e);
         decoded = json.reply.trim();
       }
 
