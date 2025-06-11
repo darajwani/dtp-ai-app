@@ -8,7 +8,6 @@ function VerbalStage() {
   const chunkBufferRef = useRef([]);
   const recordingFinalNow = useRef(false);
   const vadInstanceRef = useRef(null);
-  const longRouteTriggered = useRef(false);
 
   useEffect(() => {
     async function startVAD() {
@@ -23,8 +22,6 @@ function VerbalStage() {
 
       const vadInstance = await vad.MicVAD.new({
         onSpeechStart: () => {
-          if (longRouteTriggered.current) return;
-
           console.log("🗣️ Speech detected!");
           if (mediaRecorderRef.current?.state === 'recording') return;
 
@@ -53,16 +50,16 @@ function VerbalStage() {
             recordingFinalNow.current = false;
 
             console.log(`📤 Sending file: ${filename}`);
-            sendToTranscription(blob);
+            sendToTranscription(blob, filename);
           };
 
           mediaRecorderRef.current = recorder;
           recorder.start();
         },
         onSpeechEnd: () => {
+          console.log("🔇 Speech ended.");
           if (!recordingFinalNow.current && mediaRecorderRef.current?.state === 'recording') {
             mediaRecorderRef.current.stop();
-            console.log("🔇 Speech ended.");
           }
         },
         modelURL: '/vad/silero_vad.onnx',
@@ -78,7 +75,9 @@ function VerbalStage() {
     startVAD();
 
     return () => {
-      vadInstanceRef.current?.stop?.();
+      if (vadInstanceRef.current?.stop) {
+        vadInstanceRef.current.stop();
+      }
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
@@ -91,9 +90,9 @@ function VerbalStage() {
     }
   }
 
-  async function sendToTranscription(blob) {
+  async function sendToTranscription(blob, filename) {
     const formData = new FormData();
-    formData.append('file', blob, 'recording.webm');
+    formData.append('file', blob, filename);
 
     try {
       const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
@@ -105,25 +104,35 @@ function VerbalStage() {
       const json = await res.json();
       console.log("📦 JSON response received:", json);
 
+      if (!json.reply) {
+        console.error("❌ No 'reply' field in response");
+        return;
+      }
+
       let decoded = json.reply.trim();
       if (isBase64(decoded)) {
         decoded = atob(decoded).trim();
-        console.log("🔓 Raw base64-decoded:", decoded);
+        console.log("🧪 Base64 decoded reply:", decoded);
+      } else {
+        console.log("🧾 Plain reply (no decoding needed):", decoded);
       }
 
       setTranscript(prev => prev + `\n\n📋 Feedback:\n${decoded}`);
     } catch (err) {
-      console.error("❌ Error submitting for transcription:", err);
+      console.error("❌ Transcription error:", err);
       setTranscript(prev => prev + `\n\n⚠️ Error retrieving feedback.`);
     }
   }
 
   function handleFinal() {
     console.log("✅ Final triggered");
-    longRouteTriggered.current = true;
     recordingFinalNow.current = true;
 
-    vadInstanceRef.current?.stop?.();
+    if (vadInstanceRef.current?.stop) {
+      vadInstanceRef.current.stop();
+      console.log("🎤 VAD successfully stopped after Final");
+    }
+
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.stop();
     } else {
@@ -151,7 +160,7 @@ function VerbalStage() {
       }
 
       const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-      sendToTranscription(blob);
+      sendToTranscription(blob, 'verbal-final.webm');
     };
 
     mediaRecorderRef.current = recorder;
@@ -174,14 +183,23 @@ function VerbalStage() {
       </div>
 
       <div className="flex space-x-4">
-        <button onClick={() => {
-          if (mediaRecorderRef.current?.state === 'recording') {
-            mediaRecorderRef.current.stop();
-            console.log("⏹️ Force stop triggered");
-          }
-        }} className="bg-red-200 text-red-800 px-4 py-1 rounded">⏹️ Force Stop</button>
-
-        <button onClick={handleFinal} className="bg-green-200 text-green-800 px-4 py-1 rounded">📤 Send as Final (Test)</button>
+        <button
+          onClick={() => {
+            if (mediaRecorderRef.current?.state === 'recording') {
+              mediaRecorderRef.current.stop();
+              console.log("⏹️ Force stop triggered");
+            }
+          }}
+          className="bg-red-200 text-red-800 px-4 py-1 rounded"
+        >
+          ⏹️ Force Stop
+        </button>
+        <button
+          onClick={handleFinal}
+          className="bg-green-200 text-green-800 px-4 py-1 rounded"
+        >
+          📤 Send as Final (Test)
+        </button>
       </div>
 
       {transcript && (
