@@ -75,10 +75,8 @@ function VerbalStage() {
     startVAD();
 
     return () => {
-      if (vadInstanceRef.current?.stop) {
-        vadInstanceRef.current.stop();
-      }
-      streamRef.current?.getTracks().forEach((track) => track.stop());
+      vadInstanceRef.current?.stop?.();
+      streamRef.current?.getTracks().forEach(track => track.stop());
     };
   }, []);
 
@@ -109,24 +107,21 @@ function VerbalStage() {
         return;
       }
 
-      let decoded = json.reply.trim();
+      const raw = json.reply.trim();
+      let decoded = raw;
+      let fallback = false;
 
-      if (isBase64(decoded)) {
-        decoded = atob(decoded).trim();
-        console.log("🔍 Raw base64-decoded:", decoded);
-
-        try {
-          const parsed = JSON.parse(decoded);
-          if (parsed?.reply) {
-            decoded = parsed.reply;
-            console.log("✅ Extracted from JSON:", decoded);
-          }
-        } catch {
-          // not JSON, keep as is
-        }
+      if (isBase64(raw)) {
+        decoded = atob(raw).trim();
+        console.log("🔓 Base64 decoded:", decoded);
+      } else {
+        fallback = true;
+        console.log("🧾 No decoding applied, plain response:", decoded);
       }
 
-      setTranscript(prev => prev + `\n\n📋 Feedback:\n${decoded}`);
+      setTranscript(prev =>
+        prev + `\n\n📋 ${fallback ? 'Raw Response' : 'Feedback'}:\n${decoded}`
+      );
     } catch (err) {
       console.error("❌ Transcription error:", err);
       setTranscript(prev => prev + `\n\n⚠️ Error retrieving feedback.`);
@@ -137,15 +132,10 @@ function VerbalStage() {
     console.log("✅ Final triggered");
     recordingFinalNow.current = true;
 
-    if (vadInstanceRef.current?.stop) {
-      vadInstanceRef.current.stop();
-      console.log("🎤 VAD successfully stopped after Final");
-    }
-
+    vadInstanceRef.current?.stop?.();
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.stop();
     } else {
-      console.warn("⚠️ No active recording; capturing short final clip");
       startFinalRecording();
     }
   }
