@@ -1,52 +1,96 @@
-import { useState } from 'react'
-import caseData from '../data/case1.json'
 
-export default function HistoryInterview() {
-  const [messages, setMessages] = useState([
-    { from: 'ai', text: caseData.initialPrompt }
-  ])
-  const [input, setInput] = useState('')
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-  const handleSend = () => {
-    if (!input.trim()) return
+export default function Stage1_History() {
+  const navigate = useNavigate();
+  const [scenarioId] = useState('DTP-001');
+  const [inputText, setInputText] = useState('');
+  const [responseText, setResponseText] = useState('');
+  const [chatLog, setChatLog] = useState([]);
+  const [timerId, setTimerId] = useState(null);
+  const [showTimeUp, setShowTimeUp] = useState(false);
 
-    const newMessages = [...messages, { from: 'user', text: input }]
-    const response = simulateAIResponse(input, caseData.responses)
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setShowTimeUp(true);
+      setTimeout(() => navigate('/stage2'), 2000);
+    }, 10 * 60 * 1000);
+    setTimerId(id);
+    return () => clearTimeout(id);
+  }, [navigate]);
 
-    setMessages([...newMessages, { from: 'ai', text: response }])
-    setInput('')
-  }
+  const handleSend = async () => {
+    if (!inputText.trim()) return;
 
-  const simulateAIResponse = (input, responses) => {
-    const lower = input.toLowerCase()
-    for (const keyword in responses) {
-      if (lower.includes(keyword)) return responses[keyword]
+    const formData = new FormData();
+    formData.append('scenarioId', scenarioId);
+    formData.append('transcript', inputText);
+
+    console.log('Sending form data...');
+    for (let pair of formData.entries()) {
+      console.log(pair[0] + ': ' + pair[1]);
     }
-    return "Can you clarify what you mean?"
-  }
+
+    try {
+      const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      console.log('Response from Make:', data);
+
+      const aiReply = data.reply || '[No reply from AI]';
+
+      setChatLog(prev => [...prev, { role: 'You', text: inputText }, { role: 'Patient', text: aiReply }]);
+      setInputText('');
+      setResponseText(aiReply);
+    } catch (err) {
+      console.error('Fetch error:', err);
+      setChatLog(prev => [...prev, { role: 'System', text: '❌ Error contacting server.' }]);
+    }
+  };
 
   return (
-    <div>
-      <div className="bg-gray-100 p-4 rounded shadow max-h-[300px] overflow-y-auto mb-4">
-        {messages.map((msg, idx) => (
-          <div key={idx} className={`${msg.from === 'ai' ? 'text-blue-600' : 'text-black'} mb-2`}>
-            <strong>{msg.from === 'ai' ? 'Patient:' : 'You:'}</strong> {msg.text}
-          </div>
-        ))}
+    <div className="p-6 max-w-xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">🦷 DTP Case 1 Simulation</h1>
+
+      {showTimeUp && <div className="text-red-600 font-bold mb-4">⏰ Time's Up! Proceeding to Stage 2...</div>}
+
+      <div className="border p-4 mb-4 rounded bg-gray-100 h-60 overflow-y-auto">
+        {chatLog.length === 0 ? (
+          <p className="text-gray-500">Start your conversation with the patient...</p>
+        ) : (
+          chatLog.map((msg, i) => (
+            <div key={i} className="mb-2">
+              <strong>{msg.role}:</strong> {msg.text}
+            </div>
+          ))
+        )}
       </div>
-      <div className="flex gap-2">
+
+      <div className="flex gap-2 mb-4">
         <input
-          type="text"
-          className="border px-4 py-2 rounded w-full"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
           placeholder="Ask a question..."
+          className="border px-3 py-2 rounded w-full"
         />
-        <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={handleSend}>
+        <button
+          onClick={handleSend}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
           Send
         </button>
       </div>
+
+      <button
+        onClick={() => navigate('/stage2')}
+        className="bg-gray-700 text-white px-4 py-2 rounded"
+      >
+        Proceed to Orange Stage
+      </button>
     </div>
-  )
+  );
 }
