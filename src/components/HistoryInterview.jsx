@@ -14,6 +14,10 @@ export default function HistoryInterview() {
   const vadInstanceRef = useRef(null);
   const timerRef = useRef(null);
 
+  const isWaitingRef = useRef(false);
+  const isSpeakingRef = useRef(false);
+  const audioQueueRef = useRef([]);
+
   useEffect(() => {
     async function startVAD() {
       const vad = window?.vad || window;
@@ -35,9 +39,7 @@ export default function HistoryInterview() {
           });
 
           recorder.ondataavailable = (e) => {
-            if (e.data.size > 0) {
-              chunkBufferRef.current.push(e.data);
-            }
+            if (e.data.size > 0) chunkBufferRef.current.push(e.data);
           };
 
           recorder.onstop = () => {
@@ -55,19 +57,18 @@ export default function HistoryInterview() {
               if (mediaRecorderRef.current?.state === 'recording') {
                 mediaRecorderRef.current.stop();
               }
-            }, 300);
+            }, 500);
           }
         },
         modelURL: '/vad/silero_vad.onnx',
-        throttleTime: 200,
-        positiveSpeechThreshold: 0.5,
-        negativeSpeechThreshold: 0.3,
+        throttleTime: 400,
+        positiveSpeechThreshold: 0.6,
+        negativeSpeechThreshold: 0.2,
       });
 
       vadInstanceRef.current = vadInstance;
       await vadInstance.start();
 
-      // Auto-stage transition timer
       timerRef.current = setInterval(() => {
         setTimer(prev => {
           if (prev <= 1) {
@@ -92,6 +93,9 @@ export default function HistoryInterview() {
   }, [navigate]);
 
   async function sendToAI(blob) {
+    if (isWaitingRef.current) return;
+    isWaitingRef.current = true;
+
     const formData = new FormData();
     formData.append('file', blob, 'question.webm');
     formData.append('scenarioId', scenarioId);
@@ -105,27 +109,48 @@ export default function HistoryInterview() {
       const json = await res.json();
       const aiReply = json.reply || '[No reply received]';
       setChatLog(prev => [...prev, `🧑‍⚕️ You: (Your question)`, `🦷 Patient: ${aiReply}`]);
-      speakText(aiReply);
+      queueAndSpeakReply(aiReply);
     } catch (err) {
       console.error("❌ AI fetch error:", err);
       setChatLog(prev => [...prev, "⚠️ Error: could not reach AI"]);
+    } finally {
+      isWaitingRef.current = false;
     }
   }
 
-  async function speakText(text) {
-    try {
-      const res = await fetch('/.netlify/functions/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
+  function queueAndSpeakReply(text) {
+    audioQueueRef.current.push(text);
+    if (!isSpeakingRef.current) playNextInQueue();
+  }
 
-      const audioBlob = await res.blob();
-      const url = URL.createObjectURL(audioBlob);
-      new Audio(url).play();
-    } catch (err) {
-      console.error("🔊 TTS error:", err);
+  function playNextInQueue() {
+    if (audioQueueRef.current.length === 0) {
+      isSpeakingRef.current = false;
+      return;
     }
+
+    const text = audioQueueRef.current.shift();
+    isSpeakingRef.current = true;
+
+    fetch('/.netlify/functions/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    })
+      .then(res => res.blob())
+      .then(audioBlob => {
+        const url = URL.createObjectURL(audioBlob);
+        const audio = new Audio(url);
+        audio.play();
+        audio.onended = () => {
+          isSpeakingRef.current = false;
+          playNextInQueue();
+        };
+      })
+      .catch(err => {
+        console.error("🔊 TTS error:", err);
+        isSpeakingRef.current = false;
+      });
   }
 
   const minutes = String(Math.floor(timer / 60)).padStart(2, '0');
@@ -138,10 +163,12 @@ export default function HistoryInterview() {
       <div className="border bg-gray-100 p-4 h-64 overflow-y-auto mb-4 rounded">
         {chatLog.length === 0
           ? <p className="text-gray-400">🎤 Start speaking to begin the patient interview…</p>
-          : chatLog.map((line, i) => <div key={i} className="mb-2">{line}</div>)
-        }
+          : chatLog.map((line, i) => <div key={i} className="mb-2">{line}</div>)}
       </div>
-      <p className="text-sm text-gray-600">Mic status: {micActive ? '🎙️ Listening...' : 'Idle'}</p>
+      <div className="flex items-center space-x-2 text-sm text-gray-600">
+        <span>Mic status: {micActive ? '🎙️ Listening...' : 'Idle'}</span>
+        <span className={`w-3 h-3 rounded-full ${micActive ? 'bg-red-500 animate-ping' : 'bg-gray-300'}`} />
+      </div>
     </div>
   );
 }
