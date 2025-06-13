@@ -5,6 +5,8 @@ export default function HistoryInterview() {
   const [chatLog, setChatLog] = useState([]);
   const [micActive, setMicActive] = useState(false);
   const [timer, setTimer] = useState(600); // 10 minutes
+  const [discussedIntents, setDiscussedIntents] = useState([]);
+
   const scenarioId = 'DTP-001';
   const navigate = useNavigate();
 
@@ -99,6 +101,7 @@ export default function HistoryInterview() {
     const formData = new FormData();
     formData.append('file', blob, 'question.webm');
     formData.append('scenarioId', scenarioId);
+    formData.append('context', discussedIntents.join(","));
 
     try {
       const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
@@ -108,8 +111,13 @@ export default function HistoryInterview() {
 
       const json = await res.json();
       const aiReply = json.reply || '[No reply received]';
+
       setChatLog(prev => [...prev, `🧑‍⚕️ You: (Your question)`, `🦷 Patient: ${aiReply}`]);
       queueAndSpeakReply(aiReply);
+
+      if (json.intent && !discussedIntents.includes(json.intent)) {
+        setDiscussedIntents(prev => [...prev, json.intent]);
+      }
     } catch (err) {
       console.error("❌ AI fetch error:", err);
       setChatLog(prev => [...prev, "⚠️ Error: could not reach AI"]);
