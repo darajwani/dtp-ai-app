@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 export default function HistoryInterview() {
   const [chatLog, setChatLog] = useState([]);
   const [micActive, setMicActive] = useState(false);
-  const [timer, setTimer] = useState(600);
+  const [timer, setTimer] = useState(600); // 10 minutes
   const [discussedIntents, setDiscussedIntents] = useState([]);
 
   const scenarioId = 'DTP-001';
@@ -35,6 +35,7 @@ export default function HistoryInterview() {
         onSpeechStart: () => {
           chunkBufferRef.current = [];
           setMicActive(true);
+
           const recorder = new MediaRecorder(stream, {
             mimeType: 'audio/webm;codecs=opus',
           });
@@ -100,11 +101,7 @@ export default function HistoryInterview() {
     const formData = new FormData();
     formData.append('file', blob, 'question.webm');
     formData.append('scenarioId', scenarioId);
-
-    const contextString = discussedIntents.join(",");
-    formData.append('context', contextString);
-
-    console.log("✅ Sending context to backend:", contextString);
+    formData.append('context', discussedIntents.join(","));
 
     try {
       const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
@@ -119,11 +116,7 @@ export default function HistoryInterview() {
       queueAndSpeakReply(aiReply);
 
       if (json.intent && !discussedIntents.includes(json.intent)) {
-        setDiscussedIntents(prev => {
-          const updated = [...prev, json.intent];
-          console.log("🧠 Updated discussedIntents:", updated);
-          return updated;
-        });
+        setDiscussedIntents(prev => [...prev, json.intent]);
       }
     } catch (err) {
       console.error("❌ AI fetch error:", err);
@@ -152,11 +145,11 @@ export default function HistoryInterview() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
     })
-      .then(res => res.blob())
-      .then(audioBlob => {
-        const url = URL.createObjectURL(audioBlob);
-        const audio = new Audio(url);
-        audio.play();
+      .then(res => res.json())
+      .then(data => {
+        if (!data.audioContent) throw new Error("No audio returned");
+        const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
+        audio.play().catch(console.warn);
         audio.onended = () => {
           isSpeakingRef.current = false;
           playNextInQueue();
@@ -178,7 +171,8 @@ export default function HistoryInterview() {
       <div className="border bg-gray-100 p-4 h-64 overflow-y-auto mb-4 rounded">
         {chatLog.length === 0
           ? <p className="text-gray-400">🎤 Start speaking to begin the patient interview…</p>
-          : chatLog.map((line, i) => <div key={i} className="mb-2">{line}</div>)}
+          : chatLog.map((line, i) => <div key={i} className="mb-2">{line}</div>)
+        }
       </div>
       <div className="flex items-center space-x-2 text-sm text-gray-600">
         <span>Mic status: {micActive ? '🎙️ Listening...' : 'Idle'}</span>
