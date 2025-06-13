@@ -145,11 +145,11 @@ export default function HistoryInterview() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
     })
-      .then(res => res.blob())
-      .then(audioBlob => {
-        const url = URL.createObjectURL(audioBlob);
-        const audio = new Audio(url);
-        audio.play();
+      .then(res => res.json())
+      .then(data => {
+        if (!data.audioContent) throw new Error("No audio returned");
+        const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
+        audio.play().catch(console.warn);
         audio.onended = () => {
           isSpeakingRef.current = false;
           playNextInQueue();
@@ -171,7 +171,8 @@ export default function HistoryInterview() {
       <div className="border bg-gray-100 p-4 h-64 overflow-y-auto mb-4 rounded">
         {chatLog.length === 0
           ? <p className="text-gray-400">🎤 Start speaking to begin the patient interview…</p>
-          : chatLog.map((line, i) => <div key={i} className="mb-2">{line}</div>)}
+          : chatLog.map((line, i) => <div key={i} className="mb-2">{line}</div>)
+        }
       </div>
       <div className="flex items-center space-x-2 text-sm text-gray-600">
         <span>Mic status: {micActive ? '🎙️ Listening...' : 'Idle'}</span>
