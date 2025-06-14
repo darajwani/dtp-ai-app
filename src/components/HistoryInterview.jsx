@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 export default function HistoryInterview() {
   const [chatLog, setChatLog] = useState([]);
   const [micActive, setMicActive] = useState(false);
-  const [timer, setTimer] = useState(600);
+  const [timer, setTimer] = useState(600); // 10 minutes
   const [discussedIntents, setDiscussedIntents] = useState([]);
 
   const scenarioId = 'DTP-001';
@@ -35,6 +35,7 @@ export default function HistoryInterview() {
         onSpeechStart: () => {
           chunkBufferRef.current = [];
           setMicActive(true);
+
           const recorder = new MediaRecorder(stream, {
             mimeType: 'audio/webm;codecs=opus',
           });
@@ -96,29 +97,35 @@ export default function HistoryInterview() {
   async function sendToAI(blob) {
     if (isWaitingRef.current) return;
     isWaitingRef.current = true;
-const formData = new FormData();
-formData.append('file', blob, 'question.webm');
-formData.append('scenarioId', scenarioId);
 
-const contextString = discussedIntents.join(",");
-formData.append('context', contextString); // ✅ Always include it
-console.log("✅ Sending context to backend:", contextString);
+    const formData = new FormData();
+    formData.append('file', blob, 'question.webm');
+    formData.append('scenarioId', scenarioId);
 
-for (let [key, value] of formData.entries()) {
-  console.log(`🧾 ${key}: ${value}`);
-}
+    const contextString = discussedIntents.join(",");
+    formData.append('context', contextString);
+    console.log("✅ Sending context to backend:", contextString);
 
-try {
-  const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
-    method: 'POST',
-    body: formData,
-  });
-  // ... rest of your code
+    for (let [key, value] of formData.entries()) {
+      console.log(`🧾 ${key}: ${value}`);
+    }
+
+    try {
+      const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
+        method: 'POST',
+        body: formData,
+      });
 
       const json = await res.json();
+      console.log("✅ Response from AI:", json);
+
       const aiReply = json.reply || '[No reply received]';
 
-      setChatLog(prev => [...prev, `🧑‍⚕️ You: (Your question)`, `🦷 Patient: ${aiReply}`]);
+      setChatLog(prev => [
+        ...prev,
+        `🧑‍⚕️ You: (Your question)`,
+        `🦷 Patient: ${aiReply}`
+      ]);
       queueAndSpeakReply(aiReply);
 
       if (json.intent && !discussedIntents.includes(json.intent)) {
@@ -181,7 +188,8 @@ try {
       <div className="border bg-gray-100 p-4 h-64 overflow-y-auto mb-4 rounded">
         {chatLog.length === 0
           ? <p className="text-gray-400">🎤 Start speaking to begin the patient interview…</p>
-          : chatLog.map((line, i) => <div key={i} className="mb-2">{line}</div>)}
+          : chatLog.map((line, i) => <div key={i} className="mb-2">{line}</div>)
+        }
       </div>
       <div className="flex items-center space-x-2 text-sm text-gray-600">
         <span>Mic status: {micActive ? '🎙️ Listening...' : 'Idle'}</span>
