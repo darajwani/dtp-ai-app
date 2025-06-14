@@ -96,22 +96,24 @@ export default function HistoryInterview() {
   async function sendToAI(blob) {
     if (isWaitingRef.current) return;
     isWaitingRef.current = true;
+const formData = new FormData();
+formData.append('file', blob, 'question.webm');
+formData.append('scenarioId', scenarioId);
 
-    const formData = new FormData();
-    formData.append('file', blob, 'question.webm');
-    formData.append('scenarioId', scenarioId);
+const contextString = discussedIntents.join(",");
+formData.append('context', contextString); // ✅ Always include it
+console.log("✅ Sending context to backend:", contextString);
 
-    const contextString = discussedIntents.join(",");
-    if (contextString.trim()) {
-      formData.append('context', contextString);
-    }
-    console.log("✅ Sending context to backend:", contextString);
+for (let [key, value] of formData.entries()) {
+  console.log(`🧾 ${key}: ${value}`);
+}
 
-    try {
-      const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
-        method: 'POST',
-        body: formData,
-      });
+try {
+  const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
+    method: 'POST',
+    body: formData,
+  });
+  // ... rest of your code
 
       const json = await res.json();
       const aiReply = json.reply || '[No reply received]';
