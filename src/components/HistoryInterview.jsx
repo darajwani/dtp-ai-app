@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom';
 export default function HistoryInterview() {
   const [chatLog, setChatLog] = useState([]);
   const [micActive, setMicActive] = useState(false);
-  const [timer, setTimer] = useState(600); // 10 minutes
+  const [timer, setTimer] = useState(600);
   const [discussedIntents, setDiscussedIntents] = useState([]);
+  const discussedIntentsRef = useRef([]); // ✅ New ref
 
   const scenarioId = 'DTP-001';
   const navigate = useNavigate();
@@ -35,7 +36,6 @@ export default function HistoryInterview() {
         onSpeechStart: () => {
           chunkBufferRef.current = [];
           setMicActive(true);
-
           const recorder = new MediaRecorder(stream, {
             mimeType: 'audio/webm;codecs=opus',
           });
@@ -102,7 +102,7 @@ export default function HistoryInterview() {
     formData.append('file', blob, 'question.webm');
     formData.append('scenarioId', scenarioId);
 
-    const contextString = discussedIntents.join(",");
+    const contextString = discussedIntentsRef.current.join(",");
     formData.append('context', contextString);
     console.log("✅ Sending context to backend:", contextString);
 
@@ -118,22 +118,16 @@ export default function HistoryInterview() {
 
       const json = await res.json();
       console.log("✅ Response from AI:", json);
-
       const aiReply = json.reply || '[No reply received]';
 
-      setChatLog(prev => [
-        ...prev,
-        `🧑‍⚕️ You: (Your question)`,
-        `🦷 Patient: ${aiReply}`
-      ]);
+      setChatLog(prev => [...prev, `🧑‍⚕️ You: (Your question)`, `🦷 Patient: ${aiReply}`]);
       queueAndSpeakReply(aiReply);
 
-      if (json.intent && !discussedIntents.includes(json.intent)) {
-        setDiscussedIntents(prev => {
-          const updated = [...prev, json.intent];
-          console.log("🧠 Updated discussedIntents:", updated);
-          return updated;
-        });
+      if (json.intent && !discussedIntentsRef.current.includes(json.intent)) {
+        const updated = [...discussedIntentsRef.current, json.intent];
+        discussedIntentsRef.current = updated;
+        setDiscussedIntents(updated);
+        console.log("🧠 Updated discussedIntents:", updated);
       }
     } catch (err) {
       console.error("❌ AI fetch error:", err);
