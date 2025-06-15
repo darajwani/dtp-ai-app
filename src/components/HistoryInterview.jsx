@@ -103,8 +103,10 @@ export default function HistoryInterview() {
     formData.append('scenarioId', scenarioId);
 
     const contextString = discussedIntentsRef.current.join(",");
-    formData.append('context', contextString);
+if (contextString) {
+  formData.append('context', contextString);
     console.log("✅ Sending context to backend:", contextString);
+}
 
     for (let [key, value] of formData.entries()) {
       console.log(`🧾 ${key}: ${value}`);
