@@ -6,8 +6,10 @@ export default function HistoryInterview() {
   const [micActive, setMicActive] = useState(false);
   const [timer, setTimer] = useState(600);
   const [discussedIntents, setDiscussedIntents] = useState([]);
-  const discussedIntentsRef = useRef([]); // ✅ New ref
+  const [pcIndex, setPcIndex] = useState(0); // ✅ New state
+  const pcIndexRef = useRef(0); // ✅ Tracks pc_index
 
+  const discussedIntentsRef = useRef([]);
   const scenarioId = 'DTP-001';
   const navigate = useNavigate();
 
@@ -101,15 +103,12 @@ export default function HistoryInterview() {
     const formData = new FormData();
     formData.append('file', blob, 'question.webm');
     formData.append('scenarioId', scenarioId);
+    formData.append('pc_index', pcIndexRef.current); // ✅ send pc_index
 
-    const contextString = discussedIntentsRef.current.join(",");
-if (contextString) {
-  formData.append('context', contextString);
-    console.log("✅ Sending context to backend:", contextString);
-}
-
-    for (let [key, value] of formData.entries()) {
-      console.log(`🧾 ${key}: ${value}`);
+    const contextString = discussedIntentsRef.current.join(',');
+    if (contextString) {
+      formData.append('context', contextString);
+      console.log("✅ Sending context to backend:", contextString);
     }
 
     try {
@@ -131,6 +130,15 @@ if (contextString) {
         setDiscussedIntents(updated);
         console.log("🧠 Updated discussedIntents:", updated);
       }
+
+      // ✅ Increment pc_index if appropriate
+      if (json.intent === 'ask_other_complaints') {
+        const newIndex = pcIndexRef.current + 1;
+        pcIndexRef.current = newIndex;
+        setPcIndex(newIndex);
+        console.log("🔄 Incremented pc_index →", newIndex);
+      }
+
     } catch (err) {
       console.error("❌ AI fetch error:", err);
       setChatLog(prev => [...prev, "⚠️ Error: could not reach AI"]);
