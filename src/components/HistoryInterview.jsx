@@ -7,44 +7,50 @@ export default function HistoryInterview() {
   const [timer, setTimer] = useState(600);
   const [discussedIntents, setDiscussedIntents] = useState([]);
   const [pcIndex, setPcIndex] = useState(0);
-  const pcIndexRef = useRef(0);
-
-  const discussedIntentsRef = useRef([]);
-  const scenarioId = 'DTP-001';
-  const navigate = useNavigate();
 
   const streamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const chunkBufferRef = useRef([]);
   const vadInstanceRef = useRef(null);
   const timerRef = useRef(null);
-
   const isWaitingRef = useRef(false);
   const isSpeakingRef = useRef(false);
   const audioQueueRef = useRef([]);
+  const discussedIntentsRef = useRef([]);
+  const pcIndexRef = useRef(0);
+  const navigate = useNavigate();
+
+  // ✅ SESSION ID setup
+  const sessionIdRef = useRef(() => {
+    const existing = sessionStorage.getItem('sessionId');
+    if (existing) return existing;
+    const newId = crypto.randomUUID();
+    sessionStorage.setItem('sessionId', newId);
+    return newId;
+  })();
+  const sessionId = sessionIdRef.current;
+
+  const scenarioId = 'DTP-001';
 
   useEffect(() => {
-    // ✅ STEP 1: Reset discussed_pcs on load
+    // ✅ Reset session
     fetch('https://hook.eu2.make.com/htqx1s7o8vrkd72qhx3hk5l3k77d5s4p', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scenarioId })
+      body: JSON.stringify({ scenarioId, sessionId }),
     })
       .then(res => {
         if (!res.ok) throw new Error('Reset failed');
-        console.log("✅ Reset successful: discussed_pcs cleared");
+        console.log("✅ Session reset");
       })
       .catch(err => {
         console.error("❌ Reset error:", err);
       });
 
-    // ✅ STEP 2: Start MicVAD logic
+    // ✅ MicVAD logic
     async function startVAD() {
       const vad = window?.vad || window;
-      if (!vad?.MicVAD) {
-        console.error("❌ MicVAD not found");
-        return;
-      }
+      if (!vad?.MicVAD) return console.error("❌ MicVAD not found");
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -56,28 +62,23 @@ export default function HistoryInterview() {
           const recorder = new MediaRecorder(stream, {
             mimeType: 'audio/webm;codecs=opus',
           });
-
           recorder.ondataavailable = (e) => {
             if (e.data.size > 0) chunkBufferRef.current.push(e.data);
           };
-
           recorder.onstop = () => {
             setMicActive(false);
             const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
             sendToAI(blob);
           };
-
           mediaRecorderRef.current = recorder;
           recorder.start();
         },
         onSpeechEnd: () => {
-          if (mediaRecorderRef.current?.state === 'recording') {
-            setTimeout(() => {
-              if (mediaRecorderRef.current?.state === 'recording') {
-                mediaRecorderRef.current.stop();
-              }
-            }, 500);
-          }
+          setTimeout(() => {
+            if (mediaRecorderRef.current?.state === 'recording') {
+              mediaRecorderRef.current.stop();
+            }
+          }, 500);
         },
         modelURL: '/vad/silero_vad.onnx',
         throttleTime: 400,
@@ -109,7 +110,7 @@ export default function HistoryInterview() {
       streamRef.current?.getTracks().forEach(track => track.stop());
       clearInterval(timerRef.current);
     };
-  }, [navigate]);
+  }, [navigate, sessionId, scenarioId]);
 
   async function sendToAI(blob) {
     if (isWaitingRef.current) return;
@@ -118,12 +119,13 @@ export default function HistoryInterview() {
     const formData = new FormData();
     formData.append('file', blob, 'question.webm');
     formData.append('scenarioId', scenarioId);
+    formData.append('sessionId', sessionId);
     formData.append('pc_index', pcIndexRef.current);
 
-    const contextString = discussedIntentsRef.current.join(',');
-    if (contextString) {
-      formData.append('context', contextString);
-      console.log("✅ Sending context to backend:", contextString);
+    const context = discussedIntentsRef.current.join(',');
+    if (context) {
+      formData.append('context', context);
+      console.log("🧠 Sending context:", context);
     }
 
     try {
@@ -133,9 +135,9 @@ export default function HistoryInterview() {
       });
 
       const json = await res.json();
-      console.log("✅ Response from AI:", json);
-      const aiReply = json.reply || '[No reply received]';
+      console.log("✅ AI response:", json);
 
+      const aiReply = json.reply || '[No reply]';
       setChatLog(prev => [...prev, `🧑‍⚕️ You: (Your question)`, `🦷 Patient: ${aiReply}`]);
       queueAndSpeakReply(aiReply);
 
@@ -143,19 +145,19 @@ export default function HistoryInterview() {
         const updated = [...discussedIntentsRef.current, json.intent];
         discussedIntentsRef.current = updated;
         setDiscussedIntents(updated);
-        console.log("🧠 Updated discussedIntents:", updated);
+        console.log("🧠 Intents updated:", updated);
       }
 
       if (json.intent === 'ask_other_complaints') {
         const newIndex = pcIndexRef.current + 1;
         pcIndexRef.current = newIndex;
         setPcIndex(newIndex);
-        console.log("🔄 Incremented pc_index →", newIndex);
+        console.log("🔄 PC index incremented:", newIndex);
       }
 
     } catch (err) {
-      console.error("❌ AI fetch error:", err);
-      setChatLog(prev => [...prev, "⚠️ Error: could not reach AI"]);
+      console.error("❌ AI error:", err);
+      setChatLog(prev => [...prev, "⚠️ Could not contact AI"]);
     } finally {
       isWaitingRef.current = false;
     }
@@ -182,7 +184,7 @@ export default function HistoryInterview() {
     })
       .then(res => res.json())
       .then(data => {
-        if (!data.audioContent) throw new Error("No audio returned");
+        if (!data.audioContent) throw new Error("No audio");
         const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
         audio.play().catch(console.warn);
         audio.onended = () => {
