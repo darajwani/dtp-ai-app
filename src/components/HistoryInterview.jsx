@@ -127,7 +127,7 @@ export default function HistoryInterview() {
     }
 
     try {
-      const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
+      const res = await fetch('https://hook.eu2.make.com/5spyouenv7ty28um9jojr6il1xy8isg7', {
         method: 'POST',
         body: formData,
       });
