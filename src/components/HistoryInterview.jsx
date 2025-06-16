@@ -20,20 +20,24 @@ export default function HistoryInterview() {
   const pcIndexRef = useRef(0);
   const navigate = useNavigate();
 
-  // ✅ SESSION ID setup
-  const sessionIdRef = useRef(() => {
+  // ✅ Fix: Correct sessionId setup
+  const sessionIdRef = useRef(null);
+  if (!sessionIdRef.current) {
     const existing = sessionStorage.getItem('sessionId');
-    if (existing) return existing;
-    const newId = crypto.randomUUID();
-    sessionStorage.setItem('sessionId', newId);
-    return newId;
-  })();
+    if (existing) {
+      sessionIdRef.current = existing;
+    } else {
+      const newId = crypto.randomUUID();
+      sessionStorage.setItem('sessionId', newId);
+      sessionIdRef.current = newId;
+    }
+  }
   const sessionId = sessionIdRef.current;
 
   const scenarioId = 'DTP-001';
 
   useEffect(() => {
-    // ✅ Reset session
+    // ✅ Reset session on load
     fetch('https://hook.eu2.make.com/htqx1s7o8vrkd72qhx3hk5l3k77d5s4p', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -47,7 +51,6 @@ export default function HistoryInterview() {
         console.error("❌ Reset error:", err);
       });
 
-    // ✅ MicVAD logic
     async function startVAD() {
       const vad = window?.vad || window;
       if (!vad?.MicVAD) return console.error("❌ MicVAD not found");
@@ -59,17 +62,21 @@ export default function HistoryInterview() {
         onSpeechStart: () => {
           chunkBufferRef.current = [];
           setMicActive(true);
+
           const recorder = new MediaRecorder(stream, {
             mimeType: 'audio/webm;codecs=opus',
           });
+
           recorder.ondataavailable = (e) => {
             if (e.data.size > 0) chunkBufferRef.current.push(e.data);
           };
+
           recorder.onstop = () => {
             setMicActive(false);
             const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
             sendToAI(blob);
           };
+
           mediaRecorderRef.current = recorder;
           recorder.start();
         },
@@ -110,7 +117,7 @@ export default function HistoryInterview() {
       streamRef.current?.getTracks().forEach(track => track.stop());
       clearInterval(timerRef.current);
     };
-  }, [navigate, sessionId, scenarioId]);
+  }, [navigate, scenarioId, sessionId]);
 
   async function sendToAI(blob) {
     if (isWaitingRef.current) return;
