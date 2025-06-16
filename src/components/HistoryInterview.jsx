@@ -6,8 +6,8 @@ export default function HistoryInterview() {
   const [micActive, setMicActive] = useState(false);
   const [timer, setTimer] = useState(600);
   const [discussedIntents, setDiscussedIntents] = useState([]);
-  const [pcIndex, setPcIndex] = useState(0); // ✅ New state
-  const pcIndexRef = useRef(0); // ✅ Tracks pc_index
+  const [pcIndex, setPcIndex] = useState(0);
+  const pcIndexRef = useRef(0);
 
   const discussedIntentsRef = useRef([]);
   const scenarioId = 'DTP-001';
@@ -24,6 +24,21 @@ export default function HistoryInterview() {
   const audioQueueRef = useRef([]);
 
   useEffect(() => {
+    // ✅ STEP 1: Reset discussed_pcs on load
+    fetch('https://hook.eu2.make.com/htqx1s7o8vrkd72qhx3hk5l3k77d5s4p', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scenarioId })
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Reset failed');
+        console.log("✅ Reset successful: discussed_pcs cleared");
+      })
+      .catch(err => {
+        console.error("❌ Reset error:", err);
+      });
+
+    // ✅ STEP 2: Start MicVAD logic
     async function startVAD() {
       const vad = window?.vad || window;
       if (!vad?.MicVAD) {
@@ -103,7 +118,7 @@ export default function HistoryInterview() {
     const formData = new FormData();
     formData.append('file', blob, 'question.webm');
     formData.append('scenarioId', scenarioId);
-    formData.append('pc_index', pcIndexRef.current); // ✅ send pc_index
+    formData.append('pc_index', pcIndexRef.current);
 
     const contextString = discussedIntentsRef.current.join(',');
     if (contextString) {
@@ -131,7 +146,6 @@ export default function HistoryInterview() {
         console.log("🧠 Updated discussedIntents:", updated);
       }
 
-      // ✅ Increment pc_index if appropriate
       if (json.intent === 'ask_other_complaints') {
         const newIndex = pcIndexRef.current + 1;
         pcIndexRef.current = newIndex;
