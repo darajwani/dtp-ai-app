@@ -37,12 +37,6 @@ export default function HistoryInterview() {
   const scenarioId = 'DTP-001';
 
   useEffect(() => {
-    fetch('https://hook.eu2.make.com/htqx1s7o8vrkd72qhx3hk5l3k77d5s4p', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scenarioId, sessionId }),
-    }).catch(console.error);
-
     async function startVAD() {
       const vad = window?.vad || window;
       if (!vad?.MicVAD) return;
@@ -98,7 +92,6 @@ export default function HistoryInterview() {
               stream.getTracks().forEach(track => track.stop());
             }
 
-            // 🔁 Send transcript webhook
             const payload = {
               sessionId,
               scenarioId,
