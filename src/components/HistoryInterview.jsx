@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 export default function HistoryInterview() {
   const [chatLog, setChatLog] = useState([]);
   const [micActive, setMicActive] = useState(false);
-  const [timer, setTimer] = useState(05); // 10 minutes
+  const [timer, setTimer] = useState(10);
   const [discussedIntents, setDiscussedIntents] = useState([]);
   const [pcIndex, setPcIndex] = useState(0);
 
@@ -37,7 +37,6 @@ export default function HistoryInterview() {
   const scenarioId = 'DTP-001';
 
   useEffect(() => {
-    // Session reset
     fetch('https://hook.eu2.make.com/htqx1s7o8vrkd72qhx3hk5l3k77d5s4p', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -88,15 +87,18 @@ export default function HistoryInterview() {
       vadInstanceRef.current = vadInstance;
       await vadInstance.start();
 
-      // Timer Countdown
       timerRef.current = setInterval(() => {
         setTimer(prev => {
           if (prev <= 1) {
             clearInterval(timerRef.current);
-            vadInstance.stop();
-            stream.getTracks().forEach(track => track.stop());
+            if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
+              vadInstanceRef.current.stop();
+            }
+            if (stream && stream.getTracks) {
+              stream.getTracks().forEach(track => track.stop());
+            }
 
-            // 🔥 Trigger Transcript Webhook
+            // 🔁 Send transcript webhook
             const payload = {
               sessionId,
               scenarioId,
@@ -131,7 +133,9 @@ export default function HistoryInterview() {
     startVAD();
 
     return () => {
-      vadInstanceRef.current?.stop?.();
+      if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
+        vadInstanceRef.current.stop();
+      }
       streamRef.current?.getTracks().forEach(track => track.stop());
       clearInterval(timerRef.current);
     };
