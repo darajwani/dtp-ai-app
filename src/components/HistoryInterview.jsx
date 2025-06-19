@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 export default function HistoryInterview() {
   const [chatLog, setChatLog] = useState([]);
   const [micActive, setMicActive] = useState(false);
-  const [timer, setTimer] = useState(50);
+  const [timer, setTimer] = useState(15);
   const [discussedIntents, setDiscussedIntents] = useState([]);
   const [pcIndex, setPcIndex] = useState(0);
 
