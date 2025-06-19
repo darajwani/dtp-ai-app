@@ -124,50 +124,51 @@ function VerbalStage() {
   }
 
   async function sendToTranscription(blob, filename) {
-    const formData = new FormData();
-    formData.append('file', blob, filename);
+  const formData = new FormData();
 
-    try {
-      const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
-        method: 'POST',
-        body: formData,
-      });
+  formData.append('file', blob, filename);
+  formData.append('sessionId', 'abc123'); // 🔁 Replace this with a real sessionId later
+  formData.append('role', recordingFinalNow.current ? 'student' : 'student');
+  formData.append('final', recordingFinalNow.current ? 'true' : 'false');
 
-      console.log("✅ File sent, response status:", res.status);
-      const json = await res.json();
-      console.log("📦 JSON response received:", json);
+  try {
+    const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
+      method: 'POST',
+      body: formData,
+    });
 
-      if (!json.reply) {
-        console.error("❌ No 'reply' field in response for file:", filename);
-        const label = filename === 'verbal-final.webm' ? '🟢 Final Feedback:' : '📋 Feedback:';
-        const fallbackReplies = ["Okay.", "Got it.", "Sure.", "Alright.", "Noted."];
-        const randomShort = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
-        setTranscript(prev => prev + `\n\n${label}\n${randomShort}`);
-        return;
-      }
+    console.log("✅ File sent, response status:", res.status);
+    const json = await res.json();
+    console.log("📦 JSON response received:", json);
 
-      let decoded = json.reply.trim();
-      try {
-        const decodedCandidate = atob(decoded);
-        const isMostlyText = /^[\x20-\x7E\r\n\t]+$/.test(decodedCandidate.trim());
-        if (isMostlyText) {
-          decoded = decodedCandidate.trim();
-          console.log("🧪 Base64 decoded reply:", decoded);
-        } else {
-          console.log("🧾 Using original reply (not cleanly decodable)");
-        }
-      } catch {
-        console.log("🧾 Not Base64 or failed decoding, using raw reply");
-      }
-
-      const route = json.route?.toLowerCase() || 'short';
-      const label = route === 'long' ? '🟢 Final Feedback:' : '📋 Feedback:';
-      setTranscript(prev => prev + `\n\n${label}\n${decoded}`);
-    } catch (err) {
-      console.error("❌ Transcription error:", err);
-      setTranscript(prev => prev + `\n\n⚠️ Error retrieving feedback.`);
+    if (!json.reply) {
+      const label = filename === 'verbal-final.webm' ? '🟢 Final Feedback:' : '📋 Feedback:';
+      const fallbackReplies = ["Okay.", "Got it.", "Sure.", "Alright.", "Noted."];
+      const randomShort = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+      setTranscript(prev => prev + `\n\n${label}\n${randomShort}`);
+      return;
     }
+
+    let decoded = json.reply.trim();
+    try {
+      const decodedCandidate = atob(decoded);
+      const isMostlyText = /^[\x20-\x7E\r\n\t]+$/.test(decodedCandidate.trim());
+      if (isMostlyText) {
+        decoded = decodedCandidate.trim();
+      }
+    } catch {
+      // Ignore decoding error
+    }
+
+    const route = json.route?.toLowerCase() || 'short';
+    const label = route === 'long' ? '🟢 Final Feedback:' : '📋 Feedback:';
+    setTranscript(prev => prev + `\n\n${label}\n${decoded}`);
+  } catch (err) {
+    console.error("❌ Transcription error:", err);
+    setTranscript(prev => prev + `\n\n⚠️ Error retrieving feedback.`);
   }
+}
+
 
   function handleFinal() {
     console.log("✅ Final triggered");
