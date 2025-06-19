@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 export default function HistoryInterview() {
   const [chatLog, setChatLog] = useState([]);
   const [micActive, setMicActive] = useState(false);
-  const [timer, setTimer] = useState(10);
+  const [timer, setTimer] = useState(05); // 10 minutes
   const [discussedIntents, setDiscussedIntents] = useState([]);
   const [pcIndex, setPcIndex] = useState(0);
 
@@ -37,6 +37,7 @@ export default function HistoryInterview() {
   const scenarioId = 'DTP-001';
 
   useEffect(() => {
+    // Session reset
     fetch('https://hook.eu2.make.com/htqx1s7o8vrkd72qhx3hk5l3k77d5s4p', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -54,7 +55,6 @@ export default function HistoryInterview() {
         onSpeechStart: () => {
           chunkBufferRef.current = [];
           setMicActive(true);
-
           const recorder = new MediaRecorder(stream, {
             mimeType: 'audio/webm;codecs=opus',
           });
@@ -88,6 +88,7 @@ export default function HistoryInterview() {
       vadInstanceRef.current = vadInstance;
       await vadInstance.start();
 
+      // Timer Countdown
       timerRef.current = setInterval(() => {
         setTimer(prev => {
           if (prev <= 1) {
@@ -95,29 +96,30 @@ export default function HistoryInterview() {
             vadInstance.stop();
             stream.getTracks().forEach(track => track.stop());
 
-            // ✅ Trigger transcript webhook before ending session
-           fetch(transcriptWebhookURL, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    sessionId,
-    scenarioId,
-    pc_index: pcIndexRef.current,
-    context: discussedIntentsRef.current.join(','),
-    timestamp: new Date().toISOString()
-  })
-})
-.then(() => {
-  console.log('✅ Transcript trigger sent');
-  navigate('/stage2');
-})
-.catch(err => {
-  console.error("❌ Failed to send transcript:", err);
-  navigate('/stage2');
-});
+            // 🔥 Trigger Transcript Webhook
+            const payload = {
+              sessionId,
+              scenarioId,
+              pc_index: pcIndexRef.current,
+              context: discussedIntentsRef.current.join(','),
+              timestamp: new Date().toISOString(),
+            };
 
+            console.log("📤 Sending transcript trigger:", payload);
+
+            fetch(transcriptWebhookURL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            })
+              .then(() => {
+                console.log("✅ Transcript webhook triggered");
+                navigate('/stage2');
+              })
+              .catch((err) => {
+                console.error("❌ Failed to send transcript trigger:", err);
+                navigate('/stage2');
+              });
 
             return 0;
           }
