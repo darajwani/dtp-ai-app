@@ -96,20 +96,28 @@ export default function HistoryInterview() {
             stream.getTracks().forEach(track => track.stop());
 
             // ✅ Trigger transcript webhook before ending session
-            fetch(transcriptWebhookURL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                sessionId,
-                scenarioId,
-              }),
-            }).then(() => {
-              console.log('✅ Transcript trigger sent');
-              navigate('/stage2');
-            }).catch(err => {
-              console.error("❌ Failed to send transcript:", err);
-              navigate('/stage2');
-            });
+           fetch(transcriptWebhookURL, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    sessionId,
+    scenarioId,
+    pc_index: pcIndexRef.current,
+    context: discussedIntentsRef.current.join(','),
+    timestamp: new Date().toISOString()
+  })
+})
+.then(() => {
+  console.log('✅ Transcript trigger sent');
+  navigate('/stage2');
+})
+.catch(err => {
+  console.error("❌ Failed to send transcript:", err);
+  navigate('/stage2');
+});
+
 
             return 0;
           }
