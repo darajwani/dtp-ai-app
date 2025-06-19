@@ -20,7 +20,8 @@ export default function HistoryInterview() {
   const pcIndexRef = useRef(0);
   const navigate = useNavigate();
 
-  // ✅ Fix: Correct sessionId setup
+  const transcriptWebhookURL = 'https://hook.eu2.make.com/ahtfo1phr8gpc6wlfwpvz22pqasicmxn';
+
   const sessionIdRef = useRef(null);
   if (!sessionIdRef.current) {
     const existing = sessionStorage.getItem('sessionId');
@@ -33,27 +34,18 @@ export default function HistoryInterview() {
     }
   }
   const sessionId = sessionIdRef.current;
-
   const scenarioId = 'DTP-001';
 
   useEffect(() => {
-    // ✅ Reset session on load
     fetch('https://hook.eu2.make.com/htqx1s7o8vrkd72qhx3hk5l3k77d5s4p', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scenarioId, sessionId }),
-    })
-      .then(res => {
-        if (!res.ok) throw new Error('Reset failed');
-        console.log("✅ Session reset");
-      })
-      .catch(err => {
-        console.error("❌ Reset error:", err);
-      });
+    }).catch(console.error);
 
     async function startVAD() {
       const vad = window?.vad || window;
-      if (!vad?.MicVAD) return console.error("❌ MicVAD not found");
+      if (!vad?.MicVAD) return;
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -102,7 +94,23 @@ export default function HistoryInterview() {
             clearInterval(timerRef.current);
             vadInstance.stop();
             stream.getTracks().forEach(track => track.stop());
-            navigate('/stage2');
+
+            // ✅ Trigger transcript webhook before ending session
+            fetch(transcriptWebhookURL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId,
+                scenarioId,
+              }),
+            }).then(() => {
+              console.log('✅ Transcript trigger sent');
+              navigate('/stage2');
+            }).catch(err => {
+              console.error("❌ Failed to send transcript:", err);
+              navigate('/stage2');
+            });
+
             return 0;
           }
           return prev - 1;
@@ -130,10 +138,7 @@ export default function HistoryInterview() {
     formData.append('pc_index', pcIndexRef.current);
 
     const context = discussedIntentsRef.current.join(',');
-    if (context) {
-      formData.append('context', context);
-      console.log("🧠 Sending context:", context);
-    }
+    if (context) formData.append('context', context);
 
     try {
       const res = await fetch('https://hook.eu2.make.com/5spyouenv7ty28um9jojr6il1xy8isg7', {
@@ -142,9 +147,8 @@ export default function HistoryInterview() {
       });
 
       const json = await res.json();
-      console.log("✅ AI response:", json);
-
       const aiReply = json.reply || '[No reply]';
+
       setChatLog(prev => [...prev, `🧑‍⚕️ You: (Your question)`, `🦷 Patient: ${aiReply}`]);
       queueAndSpeakReply(aiReply);
 
@@ -152,14 +156,12 @@ export default function HistoryInterview() {
         const updated = [...discussedIntentsRef.current, json.intent];
         discussedIntentsRef.current = updated;
         setDiscussedIntents(updated);
-        console.log("🧠 Intents updated:", updated);
       }
 
       if (json.intent === 'ask_other_complaints') {
         const newIndex = pcIndexRef.current + 1;
         pcIndexRef.current = newIndex;
         setPcIndex(newIndex);
-        console.log("🔄 PC index incremented:", newIndex);
       }
 
     } catch (err) {
@@ -191,7 +193,6 @@ export default function HistoryInterview() {
     })
       .then(res => res.json())
       .then(data => {
-        if (!data.audioContent) throw new Error("No audio");
         const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
         audio.play().catch(console.warn);
         audio.onended = () => {
