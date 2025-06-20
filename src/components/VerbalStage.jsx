@@ -146,17 +146,18 @@ function VerbalStage({ sessionId, scenarioId, onStationComplete }) {
       const decoded = json.reply?.trim() || 'Thank you.';
       const route = json.route?.toLowerCase() || 'short';
 
-      if (json.completed) {
-        console.log("✅ Station complete — showing final message");
-        vadInstanceRef.current?.stop();
-        streamRef.current?.getTracks().forEach((track) => track.stop());
-        clearInterval(timerIntervalRef.current);
-        recordingEndedRef.current = true;
-        setMicActive(false);
-        setTranscript(`🟢 Final Feedback:\n${decoded}`);
-        setShowCompleteBtn(true);
-        return;
-      }
+     if (recordingFinalNow.current || json.completed) {
+  console.log("✅ Final feedback received — ending station");
+  vadInstanceRef.current?.stop();
+  streamRef.current?.getTracks().forEach((track) => track.stop());
+  clearInterval(timerIntervalRef.current);
+  recordingEndedRef.current = true;
+  setMicActive(false);
+  setTranscript((prev) => prev + `\n\n🟢 Final Feedback:\n${decoded}`);
+  setShowCompleteBtn(true);
+  return;
+}
+
 
       const label = route === 'long' ? '🟢 Final Feedback:' : '📋 Feedback:';
       setTranscript((prev) => prev + `\n\n${label}\n${decoded}`);
