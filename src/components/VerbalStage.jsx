@@ -71,10 +71,8 @@ function VerbalStage({ sessionId, scenarioId, onStationComplete }) {
             }
 
             if (recordingFinalNow.current) {
-              if (vadInstanceRef.current?.stop) vadInstanceRef.current.stop();
-              recordingEndedRef.current = true;
-              recordingFinalNow.current = false;
               console.log("🎤 VAD stopped after final");
+              // Cleanup moved to sendToTranscription
             }
           };
 
@@ -146,18 +144,23 @@ function VerbalStage({ sessionId, scenarioId, onStationComplete }) {
       const decoded = json.reply?.trim() || 'Thank you.';
       const route = json.route?.toLowerCase() || 'short';
 
-     if (recordingFinalNow.current || json.completed) {
-  console.log("✅ Final feedback received — ending station");
-  vadInstanceRef.current?.stop();
-  streamRef.current?.getTracks().forEach((track) => track.stop());
-  clearInterval(timerIntervalRef.current);
-  recordingEndedRef.current = true;
-  setMicActive(false);
-  setTranscript((prev) => prev + `\n\n🟢 Final Feedback:\n${decoded}`);
-  setShowCompleteBtn(true);
-  return;
-}
+      if (recordingFinalNow.current || json.completed) {
+        console.log("✅ Final feedback received — ending station");
 
+        setTranscript((prev) => prev + `\n\n🟢 Final Feedback:\n${decoded}`);
+        setShowCompleteBtn(true);
+
+        // Only clean up *after* UI updates
+        setTimeout(() => {
+          vadInstanceRef.current?.stop();
+          streamRef.current?.getTracks().forEach((track) => track.stop());
+          clearInterval(timerIntervalRef.current);
+          recordingEndedRef.current = true;
+          setMicActive(false);
+        }, 100); // slight delay ensures UI update first
+
+        return;
+      }
 
       const label = route === 'long' ? '🟢 Final Feedback:' : '📋 Feedback:';
       setTranscript((prev) => prev + `\n\n${label}\n${decoded}`);
@@ -167,19 +170,16 @@ function VerbalStage({ sessionId, scenarioId, onStationComplete }) {
     }
   }
 
-  function handleFinal() {
+  async function handleFinal() {
     console.log("✅ Final triggered");
     recordingFinalNow.current = true;
 
     if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stop(); // This will trigger onstop => sendToTranscription()
     } else {
       if (allChunksRef.current.length > 0) {
         const finalBlob = new Blob(allChunksRef.current, { type: 'audio/webm' });
-        sendToTranscription(finalBlob, 'verbal-final.webm');
-        recordingEndedRef.current = true;
-        if (vadInstanceRef.current?.stop) vadInstanceRef.current.stop();
-        console.log("📤 Final combined audio sent (no live speech)");
+        await sendToTranscription(finalBlob, 'verbal-final.webm');
       } else {
         alert("⚠️ No audio detected to send as final.");
       }
