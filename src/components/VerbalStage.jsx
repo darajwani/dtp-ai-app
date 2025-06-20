@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import axios from 'axios';
 
-function VerbalStage({ onStationComplete }) {
+function VerbalStage({ sessionId, scenarioId, onStationComplete }) {
   const [transcript, setTranscript] = useState('');
   const [micActive, setMicActive] = useState(false);
   const [timer, setTimer] = useState(600);
@@ -127,7 +128,8 @@ function VerbalStage({ onStationComplete }) {
   async function sendToTranscription(blob, filename) {
     const formData = new FormData();
     formData.append('file', blob, filename);
-    formData.append('sessionId', 'abc123');
+    formData.append('sessionId', sessionId);
+    formData.append('scenarioId', scenarioId);
     formData.append('role', 'student');
     formData.append('final', recordingFinalNow.current ? 'true' : 'false');
 
@@ -237,7 +239,11 @@ function VerbalStage({ onStationComplete }) {
         {showCompleteBtn && (
           <div className="mt-6 text-center">
             <button
-              onClick={() => {
+              onClick={async () => {
+                await axios.post('https://hook.eu2.make.com/jsv772zn325pbq1jfpx55x8lg8fenvgp', {
+                  sessionId,
+                  scenarioId,
+                });
                 if (typeof onStationComplete === 'function') {
                   onStationComplete();
                 } else {
