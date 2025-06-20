@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import axios from 'axios';
 
 function VerbalStage({ sessionId, scenarioId, onStationComplete }) {
   const [transcript, setTranscript] = useState('');
@@ -33,6 +32,7 @@ function VerbalStage({ sessionId, scenarioId, onStationComplete }) {
             console.log("❌ Ignoring speech after final.");
             return;
           }
+
           console.log("🗣️ Speech detected!");
 
           if (mediaRecorderRef.current?.state === 'recording') return;
@@ -71,8 +71,7 @@ function VerbalStage({ sessionId, scenarioId, onStationComplete }) {
             }
 
             if (recordingFinalNow.current) {
-              console.log("🎤 VAD stopped after final");
-              // Cleanup moved to sendToTranscription
+              console.log("🎤 VAD stop deferred to transcription response");
             }
           };
 
@@ -117,7 +116,7 @@ function VerbalStage({ sessionId, scenarioId, onStationComplete }) {
     }
 
     return () => {
-      vadInstanceRef.current?.stop();
+      if (typeof vadInstanceRef.current?.stop === 'function') vadInstanceRef.current.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
       clearInterval(timerIntervalRef.current);
     };
@@ -150,14 +149,13 @@ function VerbalStage({ sessionId, scenarioId, onStationComplete }) {
         setTranscript((prev) => prev + `\n\n🟢 Final Feedback:\n${decoded}`);
         setShowCompleteBtn(true);
 
-        // Only clean up *after* UI updates
         setTimeout(() => {
-          vadInstanceRef.current?.stop();
+          if (typeof vadInstanceRef.current?.stop === 'function') vadInstanceRef.current.stop();
           streamRef.current?.getTracks().forEach((track) => track.stop());
           clearInterval(timerIntervalRef.current);
           recordingEndedRef.current = true;
           setMicActive(false);
-        }, 100); // slight delay ensures UI update first
+        }, 100);
 
         return;
       }
@@ -175,7 +173,7 @@ function VerbalStage({ sessionId, scenarioId, onStationComplete }) {
     recordingFinalNow.current = true;
 
     if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.stop(); // This will trigger onstop => sendToTranscription()
+      mediaRecorderRef.current.stop(); // Will trigger sendToTranscription via onstop
     } else {
       if (allChunksRef.current.length > 0) {
         const finalBlob = new Blob(allChunksRef.current, { type: 'audio/webm' });
@@ -241,14 +239,21 @@ function VerbalStage({ sessionId, scenarioId, onStationComplete }) {
           <div className="mt-6 text-center">
             <button
               onClick={async () => {
-                await axios.post('https://hook.eu2.make.com/jsv772zn325pbq1jfpx55x8lg8fenvgp', {
-                  sessionId,
-                  scenarioId,
-                });
+                try {
+                  await fetch('https://hook.eu2.make.com/jsv772zn325pbq1jfpx55x8lg8fenvgp', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ sessionId, scenarioId }),
+                  });
+                  console.log("✅ Webhook triggered");
+                } catch (err) {
+                  console.error("❌ Webhook trigger failed:", err);
+                }
+
                 if (typeof onStationComplete === 'function') {
                   onStationComplete();
-                } else {
-                  window.location.href = '/feedback';
                 }
               }}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow"
