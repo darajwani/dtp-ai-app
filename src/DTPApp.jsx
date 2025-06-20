@@ -1,19 +1,29 @@
-import { useState } from 'react'
-import HistoryInterview from './components/HistoryInterview'
-import OrangeStageArtifact from './components/OrangeStageArtifact'
-import GreenStageRadiograph from './components/GreenStageRadiograph'
+import { useState } from 'react';
+import CaseSelection from './pages/CaseSelection';
+import HistoryInterview from './components/HistoryInterview';
+import OrangeStageArtifact from './components/OrangeStageArtifact';
+import GreenStageRadiograph from './components/GreenStageRadiograph';
 import VerbalStage from './components/VerbalStage';
 
 export default function DTPApp() {
-  const [stage, setStage] = useState('history')
+  const [stage, setStage] = useState('select'); // start from case selection
+  const [sessionId, setSessionId] = useState(null);
+  const [scenarioId, setScenarioId] = useState(null);
+
+  const handleStart = ({ sessionId, scenarioId }) => {
+    setSessionId(sessionId);
+    setScenarioId(scenarioId);
+    setStage('history');
+  };
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">🦷 DTP Case 1 Simulation</h1>
+      {stage === 'select' && <CaseSelection onStart={handleStart} />}
 
       {stage === 'history' && (
         <>
-          <HistoryInterview />
+          <h1 className="text-2xl font-bold mb-4">🦷 {scenarioId} – History Interview</h1>
+          <HistoryInterview sessionId={sessionId} scenarioId={scenarioId} />
           <div className="text-right mt-4">
             <button
               onClick={() => setStage('artifact')}
@@ -27,7 +37,8 @@ export default function DTPApp() {
 
       {stage === 'artifact' && (
         <>
-          <OrangeStageArtifact />
+          <h1 className="text-2xl font-bold mb-4">🟧 {scenarioId} – Artifact Stage</h1>
+          <OrangeStageArtifact sessionId={sessionId} scenarioId={scenarioId} />
           <div className="text-right mt-4">
             <button
               onClick={() => setStage('radiograph')}
@@ -41,7 +52,8 @@ export default function DTPApp() {
 
       {stage === 'radiograph' && (
         <>
-          <GreenStageRadiograph />
+          <h1 className="text-2xl font-bold mb-4">🟩 {scenarioId} – Radiograph Stage</h1>
+          <GreenStageRadiograph sessionId={sessionId} scenarioId={scenarioId} />
           <div className="text-right mt-4">
             <button
               onClick={() => setStage('verbal')}
@@ -53,7 +65,12 @@ export default function DTPApp() {
         </>
       )}
 
-      {stage === 'verbal' && <VerbalStage />}
+      {stage === 'verbal' && (
+        <>
+          <h1 className="text-2xl font-bold mb-4">🟨 {scenarioId} – Verbal Stage</h1>
+          <VerbalStage sessionId={sessionId} scenarioId={scenarioId} />
+        </>
+      )}
     </div>
-  )
+  );
 }
