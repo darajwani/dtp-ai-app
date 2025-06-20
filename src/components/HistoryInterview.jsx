@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-export default function HistoryInterview() {
+export default function HistoryInterview({ sessionId, scenarioId }) {
   const [chatLog, setChatLog] = useState([]);
   const [micActive, setMicActive] = useState(false);
   const [timer, setTimer] = useState(30);
@@ -21,20 +21,6 @@ export default function HistoryInterview() {
   const navigate = useNavigate();
 
   const transcriptWebhookURL = 'https://hook.eu2.make.com/ahtfo1phr8gpc6wlfwpvz22pqasicmxn';
-
-  const sessionIdRef = useRef(null);
-  if (!sessionIdRef.current) {
-    const existing = sessionStorage.getItem('sessionId');
-    if (existing) {
-      sessionIdRef.current = existing;
-    } else {
-      const newId = crypto.randomUUID();
-      sessionStorage.setItem('sessionId', newId);
-      sessionIdRef.current = newId;
-    }
-  }
-  const sessionId = sessionIdRef.current;
-  const scenarioId = 'DTP-001';
 
   useEffect(() => {
     async function startVAD() {
@@ -85,9 +71,11 @@ export default function HistoryInterview() {
         setTimer(prev => {
           if (prev <= 1) {
             clearInterval(timerRef.current);
+
             if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
               vadInstanceRef.current.stop();
             }
+
             if (stream && stream.getTracks) {
               stream.getTracks().forEach(track => track.stop());
             }
