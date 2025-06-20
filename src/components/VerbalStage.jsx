@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 function VerbalStage() {
   const [transcript, setTranscript] = useState('');
   const [micActive, setMicActive] = useState(false);
-  const [timer, setTimer] = useState(600); // 10 minute timer
+  const [timer, setTimer] = useState(600); // 10 minutes
+  const [showComplete, setShowComplete] = useState(false);
+
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunkBufferRef = useRef([]);
@@ -27,6 +29,7 @@ function VerbalStage() {
       const vadInstance = await vad.MicVAD.new({
         onSpeechStart: () => {
           if (recordingEndedRef.current) return;
+
           console.log("🗣️ Speech detected!");
           if (mediaRecorderRef.current?.state === 'recording') return;
 
@@ -65,9 +68,9 @@ function VerbalStage() {
 
             if (recordingFinalNow.current) {
               if (vadInstanceRef.current?.stop) vadInstanceRef.current.stop();
-              console.log("🎤 VAD stopped after final speech ended");
               recordingEndedRef.current = true;
               recordingFinalNow.current = false;
+              console.log("🎤 VAD stopped after final speech ended");
             }
           };
 
@@ -93,7 +96,6 @@ function VerbalStage() {
       vadInstanceRef.current = vadInstance;
       await vadInstance.start();
 
-      // Start countdown timer
       timerIntervalRef.current = setInterval(() => {
         setTimer((prev) => {
           if (prev <= 1) {
@@ -106,7 +108,9 @@ function VerbalStage() {
       }, 1000);
     }
 
-    startVAD();
+    if (!recordingEndedRef.current) {
+      startVAD();
+    }
 
     return () => {
       if (vadInstanceRef.current?.stop) vadInstanceRef.current.stop();
@@ -115,60 +119,56 @@ function VerbalStage() {
     };
   }, []);
 
-  function isBase64(str) {
-    try {
-      return btoa(atob(str)) === str;
-    } catch {
-      return false;
-    }
-  }
-
   async function sendToTranscription(blob, filename) {
-  const formData = new FormData();
+    const formData = new FormData();
 
-  formData.append('file', blob, filename);
-  formData.append('sessionId', 'abc123'); // 🔁 Replace this with a real sessionId later
-  formData.append('role', recordingFinalNow.current ? 'student' : 'student');
-  formData.append('final', recordingFinalNow.current ? 'true' : 'false');
+    formData.append('file', blob, filename);
+    formData.append('sessionId', 'abc123');
+    formData.append('role', 'student');
+    formData.append('final', recordingFinalNow.current ? 'true' : 'false');
 
-  try {
-    const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
-      method: 'POST',
-      body: formData,
-    });
-
-    console.log("✅ File sent, response status:", res.status);
-    const json = await res.json();
-    console.log("📦 JSON response received:", json);
-
-    if (!json.reply) {
-      const label = filename === 'verbal-final.webm' ? '🟢 Final Feedback:' : '📋 Feedback:';
-      const fallbackReplies = ["Okay.", "Got it.", "Sure.", "Alright.", "Noted."];
-      const randomShort = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
-      setTranscript(prev => prev + `\n\n${label}\n${randomShort}`);
-      return;
-    }
-
-    let decoded = json.reply.trim();
     try {
-      const decodedCandidate = atob(decoded);
-      const isMostlyText = /^[\x20-\x7E\r\n\t]+$/.test(decodedCandidate.trim());
-      if (isMostlyText) {
-        decoded = decodedCandidate.trim();
+      const res = await fetch('https://hook.eu2.make.com/crk1ln2mgic8nkj5ey5eoxij9p1l7c1e', {
+        method: 'POST',
+        body: formData,
+      });
+
+      console.log("✅ File sent, response status:", res.status);
+      const json = await res.json();
+      console.log("📦 JSON response received:", json);
+
+      let decoded = json.reply?.trim() || '';
+      try {
+        const decodedCandidate = atob(decoded);
+        const isMostlyText = /^[\x20-\x7E\r\n\t]+$/.test(decodedCandidate.trim());
+        if (isMostlyText) {
+          decoded = decodedCandidate.trim();
+        }
+      } catch {
+        // Ignore decoding error
       }
-    } catch {
-      // Ignore decoding error
+
+      const route = json.route?.toLowerCase() || 'short';
+
+      if (json.completed) {
+        console.log("✅ Station complete — showing final message");
+        if (vadInstanceRef.current?.stop) vadInstanceRef.current.stop();
+        streamRef.current?.getTracks().forEach((track) => track.stop());
+        clearInterval(timerIntervalRef.current);
+        recordingEndedRef.current = true;
+        setMicActive(false);
+        setTranscript(`🟢 Final Feedback:\n${decoded}`);
+        setShowComplete(true);
+        return;
+      }
+
+      const label = route === 'long' ? '🟢 Final Feedback:' : '📋 Feedback:';
+      setTranscript(prev => prev + `\n\n${label}\n${decoded}`);
+    } catch (err) {
+      console.error("❌ Transcription error:", err);
+      setTranscript(prev => prev + `\n\n⚠️ Error retrieving feedback.`);
     }
-
-    const route = json.route?.toLowerCase() || 'short';
-    const label = route === 'long' ? '🟢 Final Feedback:' : '📋 Feedback:';
-    setTranscript(prev => prev + `\n\n${label}\n${decoded}`);
-  } catch (err) {
-    console.error("❌ Transcription error:", err);
-    setTranscript(prev => prev + `\n\n⚠️ Error retrieving feedback.`);
   }
-}
-
 
   function handleFinal() {
     console.log("✅ Final triggered");
@@ -199,40 +199,55 @@ function VerbalStage() {
           <span role="img" aria-label="stage">🟡</span> Stage 4 – Verbal Presentation
         </h2>
 
-        <div className="flex justify-between items-center">
-          <div className="flex items-center space-x-3">
-            <div className={`w-4 h-4 rounded-full ${micActive ? 'bg-red-500 animate-ping' : 'bg-gray-300'}`}></div>
-            <p className="text-lg">{micActive ? '🎙️ Listening… Speak now' : 'Waiting for speech…'}</p>
+        {!recordingEndedRef.current && (
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-3">
+              <div className={`w-4 h-4 rounded-full ${micActive ? 'bg-red-500 animate-ping' : 'bg-gray-300'}`}></div>
+              <p className="text-lg">{micActive ? '🎙️ Listening… Speak now' : 'Waiting for speech…'}</p>
+            </div>
+            <div className="text-sm text-gray-500 font-mono">
+              ⏳ {minutes}:{seconds}
+            </div>
           </div>
-          <div className="text-sm text-gray-500 font-mono">
-            ⏳ {minutes}:{seconds}
-          </div>
-        </div>
+        )}
 
-        <div className="flex space-x-4">
-          <button
-            onClick={() => {
-              if (mediaRecorderRef.current?.state === 'recording') {
-                mediaRecorderRef.current.stop();
-                console.log("⏹️ Force stop triggered");
-              }
-            }}
-            className="bg-red-100 hover:bg-red-200 text-red-800 px-4 py-2 rounded shadow"
-          >
-            ⏹️ Force Stop
-          </button>
-          <button
-            onClick={handleFinal}
-            className="bg-green-100 hover:bg-green-200 text-green-800 px-4 py-2 rounded shadow"
-          >
-            📤 Send as Final (Test)
-          </button>
-        </div>
+        {!recordingEndedRef.current && (
+          <div className="flex space-x-4">
+            <button
+              onClick={() => {
+                if (mediaRecorderRef.current?.state === 'recording') {
+                  mediaRecorderRef.current.stop();
+                  console.log("⏹️ Force stop triggered");
+                }
+              }}
+              className="bg-red-100 hover:bg-red-200 text-red-800 px-4 py-2 rounded shadow"
+            >
+              ⏹️ Force Stop
+            </button>
+            <button
+              onClick={handleFinal}
+              className="bg-green-100 hover:bg-green-200 text-green-800 px-4 py-2 rounded shadow"
+            >
+              📤 Send as Final (Test)
+            </button>
+          </div>
+        )}
 
         {transcript && (
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 overflow-x-auto">
             <h3 className="text-lg font-semibold text-gray-800 mb-2">📝 Transcript / Feedback</h3>
             <pre className="whitespace-pre-wrap break-words text-gray-700 text-base leading-relaxed">{transcript}</pre>
+          </div>
+        )}
+
+        {showComplete && (
+          <div className="mt-6 text-center">
+            <button
+              onClick={() => window.location.href = '/feedback'} // Change to your route
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow"
+            >
+              ✅ Go to Feedback Page
+            </button>
           </div>
         )}
       </div>
