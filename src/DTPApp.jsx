@@ -4,9 +4,10 @@ import HistoryInterview from './components/HistoryInterview';
 import OrangeStageArtifact from './components/OrangeStageArtifact';
 import GreenStageRadiograph from './components/GreenStageRadiograph';
 import VerbalStage from './components/VerbalStage';
+import FeedbackPage from './pages/FeedbackPage'; // ✅ New import
 
 export default function DTPApp() {
-  const [stage, setStage] = useState('select'); // start from case selection
+  const [stage, setStage] = useState('select'); // Initial stage: case selection
   const [sessionId, setSessionId] = useState(null);
   const [scenarioId, setScenarioId] = useState(null);
 
@@ -68,9 +69,15 @@ export default function DTPApp() {
       {stage === 'verbal' && (
         <>
           <h1 className="text-2xl font-bold mb-4">🟨 {scenarioId} – Verbal Stage</h1>
-          <VerbalStage sessionId={sessionId} scenarioId={scenarioId} />
+          <VerbalStage
+            sessionId={sessionId}
+            scenarioId={scenarioId}
+            onStationComplete={() => setStage('feedback')} // ✅ Called after final submit
+          />
         </>
       )}
+
+      {stage === 'feedback' && <FeedbackPage />} {/* ✅ Modular feedback page */}
     </div>
   );
 }
