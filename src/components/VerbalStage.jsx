@@ -235,33 +235,41 @@ function VerbalStage({ sessionId, scenarioId, onStationComplete }) {
           </div>
         )}
 
-        {showCompleteBtn && (
-          <div className="mt-6 text-center">
-            <button
-              onClick={async () => {
-                try {
-                  await fetch('https://hook.eu2.make.com/jsv772zn325pbq1jfpx55x8lg8fenvgp', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ sessionId, scenarioId }),
-                  });
-                  console.log("✅ Webhook triggered");
-                } catch (err) {
-                  console.error("❌ Webhook trigger failed:", err);
-                }
+    {showCompleteBtn && (
+  <div className="mt-6 text-center">
+    <button
+      onClick={async () => {
+        try {
+          // ✅ Save to localStorage so feedback page can read it
+          localStorage.setItem('sessionId', sessionId);
+          localStorage.setItem('scenarioId', scenarioId);
 
-                if (typeof onStationComplete === 'function') {
-                  onStationComplete();
-                }
-              }}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow"
-            >
-              ✅ Go to Feedback Page
-            </button>
-          </div>
-        )}
+          // ✅ Trigger webhook
+          await fetch('https://hook.eu2.make.com/jsv772zn325pbq1jfpx55x8lg8fenvgp', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ sessionId, scenarioId }),
+          });
+          console.log("✅ Webhook triggered");
+        } catch (err) {
+          console.error("❌ Webhook trigger failed:", err);
+        }
+
+        if (typeof onStationComplete === 'function') {
+          onStationComplete();
+        } else {
+          window.location.href = '/feedback';
+        }
+      }}
+      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow"
+    >
+      ✅ Go to Feedback Page
+    </button>
+  </div>
+)}
+
       </div>
     </div>
   );
