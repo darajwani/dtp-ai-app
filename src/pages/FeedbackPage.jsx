@@ -8,7 +8,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import { CheckCircle, AlertCircle, ThumbsUp, TrendingUp } from 'lucide-react';
+import { CheckCircle, AlertCircle, ThumbsUp, TrendingUp, RefreshCw } from 'lucide-react';
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
@@ -23,29 +23,63 @@ const FeedbackPage = () => {
   const [feedback, setFeedback] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchFeedback = async () => {
-      const sessionId = localStorage.getItem('sessionId');
-      if (!sessionId) return alert('No session ID found.');
+  const sessionId = localStorage.getItem('sessionId');
 
+  const pollScenario2 = async () => {
+    if (!sessionId) return alert('No session ID found.');
+
+    setLoading(true);
+    setFeedback(null);
+
+    let tries = 0;
+    const maxTries = 10;
+    const delay = 2000;
+
+    while (tries < maxTries) {
       try {
         const res = await fetch('https://hook.eu2.make.com/w99hcfe7ddak4lymp4km7pb8liv32vzl', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId }),
+          body: JSON.stringify({ session_id: sessionId }),
         });
 
-        const data = await res.json();
-        setFeedback(data);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Object.keys(data).length > 0) {
+            setFeedback(data);
+            setLoading(false);
+            return;
+          }
+        }
       } catch (err) {
-        console.error('Error fetching feedback:', err);
-        alert('Failed to load feedback.');
-      } finally {
-        setLoading(false);
+        console.error('Polling error:', err);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, delay));
+      tries++;
+    }
+
+    setLoading(false);
+    setFeedback({ error: '⚠️ Feedback not available yet. Please try again shortly.' });
+  };
+
+  useEffect(() => {
+    const triggerScenario1 = async () => {
+      if (!sessionId) return alert('No session ID found.');
+      try {
+        await fetch('https://hook.eu2.make.com/jsv772zn325pbq1jfpx55x8lg8fenvgp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId }),
+        });
+      } catch (err) {
+        console.error('Error triggering Scenario 1:', err);
+        alert('Failed to start evaluation.');
       }
     };
 
-    fetchFeedback();
+    // On first load: trigger evaluation + poll
+    triggerScenario1().then(pollScenario2);
   }, []);
 
   const chartData = feedback && {
@@ -70,14 +104,35 @@ const FeedbackPage = () => {
     </span>
   );
 
-  if (loading) return <p className="p-6 text-lg text-gray-500">⏳ Loading feedback...</p>;
-  if (!feedback) return <p className="p-6 text-red-500">⚠️ No feedback found.</p>;
+  if (loading) return <p className="p-6 text-lg text-gray-500">⏳ Loading your feedback...</p>;
+
+  if (feedback?.error) {
+    return (
+      <div className="p-6 text-red-500 space-y-4">
+        <p>{feedback.error}</p>
+        <button
+          onClick={pollScenario2}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700"
+        >
+          <RefreshCw className="w-4 h-4" /> Refresh Feedback
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-8 font-sans">
-      <div>
-        <h2 className="text-4xl font-bold text-yellow-800 mb-2">📋 AI Feedback Summary</h2>
-        <p className="text-gray-600">Evaluation results and personalized feedback from AI</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-4xl font-bold text-yellow-800 mb-2">📋 AI Feedback Summary</h2>
+          <p className="text-gray-600">Evaluation results and personalized feedback from AI</p>
+        </div>
+        <button
+          onClick={pollScenario2}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700"
+        >
+          <RefreshCw className="w-4 h-4" /> Refresh
+        </button>
       </div>
 
       {/* Grades Section */}
