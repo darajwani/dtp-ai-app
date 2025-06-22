@@ -64,22 +64,11 @@ const FeedbackPage = () => {
   };
 
   useEffect(() => {
-    const triggerScenario1 = async () => {
-      if (!sessionId) return alert('No session ID found.');
-      try {
-        await fetch('https://hook.eu2.make.com/jsv772zn325pbq1jfpx55x8lg8fenvgp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId }),
-        });
-      } catch (err) {
-        console.error('Error triggering Scenario 1:', err);
-        alert('Failed to start evaluation.');
-      }
+    const waitThenPoll = async () => {
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Optional wait
+      pollScenario2();
     };
-
-    // On first load: trigger evaluation + poll
-    triggerScenario1().then(pollScenario2);
+    waitThenPoll();
   }, []);
 
   const chartData = feedback && {
