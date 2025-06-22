@@ -149,6 +149,20 @@ function VerbalStage({ sessionId, scenarioId, onStationComplete }) {
         setTranscript((prev) => prev + `\n\n🟢 Final Feedback:\n${decoded}`);
         setShowCompleteBtn(true);
 
+        // ✅ Trigger Scenario 1 webhook here after final feedback
+        try {
+          await fetch('https://hook.eu2.make.com/jsv772zn325pbq1jfpx55x8lg8fenvgp', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ sessionId, scenarioId }),
+          });
+          console.log("✅ Scenario 1 webhook triggered after final transcription");
+        } catch (err) {
+          console.error("❌ Scenario 1 webhook failed:", err);
+        }
+
         setTimeout(() => {
           if (typeof vadInstanceRef.current?.stop === 'function') vadInstanceRef.current.stop();
           streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -223,7 +237,7 @@ function VerbalStage({ sessionId, scenarioId, onStationComplete }) {
               onClick={handleFinal}
               className="bg-green-100 hover:bg-green-200 text-green-800 px-4 py-2 rounded shadow"
             >
-              📤 Send as Final (Test)
+              📤 Send as Final
             </button>
           </div>
         )}
@@ -235,41 +249,25 @@ function VerbalStage({ sessionId, scenarioId, onStationComplete }) {
           </div>
         )}
 
-    {showCompleteBtn && (
-  <div className="mt-6 text-center">
-    <button
-      onClick={async () => {
-        try {
-          // ✅ Save to localStorage so feedback page can read it
-          localStorage.setItem('sessionId', sessionId);
-          localStorage.setItem('scenarioId', scenarioId);
+        {showCompleteBtn && (
+          <div className="mt-6 text-center">
+            <button
+              onClick={() => {
+                localStorage.setItem('sessionId', sessionId);
+                localStorage.setItem('scenarioId', scenarioId);
 
-          // ✅ Trigger webhook
-          await fetch('https://hook.eu2.make.com/jsv772zn325pbq1jfpx55x8lg8fenvgp', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ sessionId, scenarioId }),
-          });
-          console.log("✅ Webhook triggered");
-        } catch (err) {
-          console.error("❌ Webhook trigger failed:", err);
-        }
-
-        if (typeof onStationComplete === 'function') {
-          onStationComplete();
-        } else {
-          window.location.href = '/feedback';
-        }
-      }}
-      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow"
-    >
-      ✅ Go to Feedback Page
-    </button>
-  </div>
-)}
-
+                if (typeof onStationComplete === 'function') {
+                  onStationComplete();
+                } else {
+                  window.location.href = '/feedback';
+                }
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow"
+            >
+              ✅ Go to Feedback Page
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
