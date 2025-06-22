@@ -8,7 +8,13 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import { CheckCircle, AlertCircle, ThumbsUp, TrendingUp, RefreshCw } from 'lucide-react';
+import {
+  CheckCircle,
+  AlertCircle,
+  ThumbsUp,
+  TrendingUp,
+  RefreshCw,
+} from 'lucide-react';
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
@@ -26,14 +32,17 @@ const FeedbackPage = () => {
   const sessionId = localStorage.getItem('sessionId');
 
   const pollScenario2 = async () => {
-    if (!sessionId) return alert('No session ID found.');
+    if (!sessionId) {
+      setFeedback({ error: '❌ No session ID found.' });
+      return;
+    }
 
     setLoading(true);
     setFeedback(null);
 
     let tries = 0;
     const maxTries = 10;
-    const delay = 2000;
+    const delay = 2000; // 2 seconds between polls
 
     while (tries < maxTries) {
       try {
@@ -45,7 +54,7 @@ const FeedbackPage = () => {
 
         if (res.ok) {
           const data = await res.json();
-          if (data && Object.keys(data).length > 0) {
+          if (data && Object.keys(data).length > 0 && !data.error) {
             setFeedback(data);
             setLoading(false);
             return;
@@ -65,7 +74,7 @@ const FeedbackPage = () => {
 
   useEffect(() => {
     const waitThenPoll = async () => {
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Optional wait
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Optional short wait
       pollScenario2();
     };
     waitThenPoll();
@@ -93,7 +102,13 @@ const FeedbackPage = () => {
     </span>
   );
 
-  if (loading) return <p className="p-6 text-lg text-gray-500">⏳ Loading your feedback...</p>;
+  if (loading) {
+    return (
+      <div className="p-6 text-lg text-gray-500">
+        ⏳ Loading your feedback... Please wait.
+      </div>
+    );
+  }
 
   if (feedback?.error) {
     return (
