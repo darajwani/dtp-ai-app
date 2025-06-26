@@ -17,7 +17,7 @@ export default function OrangeStageArtifact() {
   useEffect(() => {
     async function fetchClinicalData() {
       try {
-        const res = await fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vQqYourOwnGoogleSheetURLHere/pub?output=csv');
+        const res = await fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vRANdBPhVhp5kkdaU4mWn9PQjmJ1WZBXeddLeqRs0x6LGuMWttZ3vb2Easm1Ymkwwa4Y_erHDjwhrna/pub?output=csv');
         const text = await res.text();
         const lines = text.trim().split('\n');
         const headers = lines[0].split(',');
