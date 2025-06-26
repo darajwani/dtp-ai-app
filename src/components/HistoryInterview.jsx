@@ -96,13 +96,14 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
               body: JSON.stringify(payload),
             })
               .then(() => {
-                console.log("✅ Transcript webhook triggered");
-                navigate('/stage2');
-              })
-              .catch((err) => {
-                console.error("❌ Failed to send transcript trigger:", err);
-                navigate('/stage2');
-              });
+  console.log("✅ Transcript webhook triggered");
+  navigate(`/stage2?caseId=${scenarioId}`);
+})
+.catch((err) => {
+  console.error("❌ Failed to send transcript trigger:", err);
+  navigate(`/stage2?caseId=${scenarioId}`);
+});
+
 
             return 0;
           }
