@@ -1,6 +1,22 @@
-import caseData from '../data/case1.json'
+import { useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+
+// Helper to extract query parameter
+function useQuery() {
+  return new URLSearchParams(useLocation().search);
+}
 
 export default function GreenStageRadiograph({ onNext }) {
+  const query = useQuery();
+  const caseId = query.get('caseId');
+  const [radiographUrl, setRadiographUrl] = useState('');
+
+  useEffect(() => {
+    if (caseId) {
+      setRadiographUrl(`/images/cases/${caseId}/radiograph.jpg`);
+    }
+  }, [caseId]);
+
   return (
     <div className="bg-green-100 min-h-screen p-6 space-y-6">
       <h2 className="text-2xl font-bold text-green-800">🟢 Stage 3 – Radiograph & Treatment Planning</h2>
@@ -8,7 +24,7 @@ export default function GreenStageRadiograph({ onNext }) {
       <div className="bg-white p-4 rounded shadow">
         <h3 className="font-semibold mb-2">Radiograph</h3>
         <img
-          src={caseData.radiographUrl || 'https://via.placeholder.com/500x400?text=Radiograph'}
+          src={radiographUrl || 'https://via.placeholder.com/500x400?text=Radiograph'}
           alt="Radiograph"
           className="rounded border max-w-full"
         />
@@ -34,5 +50,5 @@ export default function GreenStageRadiograph({ onNext }) {
         </button>
       </div>
     </div>
-  )
+  );
 }
