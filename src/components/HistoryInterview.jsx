@@ -7,6 +7,7 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
   const [timer, setTimer] = useState(780);
   const [discussedIntents, setDiscussedIntents] = useState([]);
   const [pcIndex, setPcIndex] = useState(0);
+  const sessionEndedRef = useRef(false);
 
   const streamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -32,6 +33,7 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
 
       const vadInstance = await vad.MicVAD.new({
         onSpeechStart: () => {
+ if (sessionEndedRef.current) return;
           chunkBufferRef.current = [];
           setMicActive(true);
           const recorder = new MediaRecorder(stream, {
@@ -52,6 +54,7 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
           recorder.start();
         },
         onSpeechEnd: () => {
+          if (sessionEndedRef.current) return; 
           setTimeout(() => {
             if (mediaRecorderRef.current?.state === 'recording') {
               mediaRecorderRef.current.stop();
@@ -70,14 +73,16 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
       timerRef.current = setInterval(() => {
         setTimer(prev => {
           if (prev <= 1) {
+            sessionEndedRef.current = true; // ✅ Mark session as ended
+
             clearInterval(timerRef.current);
 
             if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
               vadInstanceRef.current.stop();
             }
 
-            if (stream && stream.getTracks) {
-              stream.getTracks().forEach(track => track.stop());
+            if (streamRef.current && streamRef.current.getTracks) {
+              streamRef.current.getTracks().forEach(track => track.stop());
             }
 
             const payload = {
@@ -96,21 +101,20 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
               body: JSON.stringify(payload),
             })
               .then(() => {
-  console.log("✅ Transcript webhook triggered");
-  navigate(`/stage2?caseId=${scenarioId}`);
-})
-.catch((err) => {
-  console.error("❌ Failed to send transcript trigger:", err);
-  navigate(`/stage2?caseId=${scenarioId}`);
-});
-
+                console.log("✅ Transcript webhook triggered");
+                navigate(`/stage2?caseId=${scenarioId}`);
+              })
+              .catch((err) => {
+                console.error("❌ Failed to send transcript trigger:", err);
+                navigate(`/stage2?caseId=${scenarioId}`);
+              });
 
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
-    }
+
 
     startVAD();
 
@@ -123,9 +127,10 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
     };
   }, [navigate, scenarioId, sessionId]);
 
-  async function sendToAI(blob) {
-    if (isWaitingRef.current) return;
-    isWaitingRef.current = true;
+
+async function sendToAI(blob) {
+  if (isWaitingRef.current || sessionEndedRef.current) return; // ✅ Prevents send during wait or after session end
+  isWaitingRef.current = true;
 
     const formData = new FormData();
     formData.append('file', blob, 'question.webm');
@@ -167,26 +172,41 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
       isWaitingRef.current = false;
     }
   }
+function queueAndSpeakReply(text) {
+  if (sessionEndedRef.current) return; // ✅ Do not queue replies after session ends
+  audioQueueRef.current.push(text);
+  if (!isSpeakingRef.current) playNextInQueue();
+}
 
-  function queueAndSpeakReply(text) {
-    audioQueueRef.current.push(text);
-    if (!isSpeakingRef.current) playNextInQueue();
+function playNextInQueue() {
+  if (sessionEndedRef.current || audioQueueRef.current.length === 0) {
+    isSpeakingRef.current = false;
+    return;
   }
 
-  function playNextInQueue() {
-    if (audioQueueRef.current.length === 0) {
-      isSpeakingRef.current = false;
-      return;
-    }
+  const text = audioQueueRef.current.shift();
+  isSpeakingRef.current = true;
 
-    const text = audioQueueRef.current.shift();
-    isSpeakingRef.current = true;
-
-    fetch('/.netlify/functions/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+  fetch('/.netlify/functions/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+    .then(res => res.json())
+    .then(data => {
+      const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
+      audio.play().catch(console.warn);
+      audio.onended = () => {
+        isSpeakingRef.current = false;
+        playNextInQueue();
+      };
     })
+    .catch(err => {
+      console.error("🔊 TTS error:", err);
+      isSpeakingRef.current = false;
+    });
+}
+
       .then(res => res.json())
       .then(data => {
         const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
