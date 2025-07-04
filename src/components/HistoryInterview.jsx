@@ -23,126 +23,48 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
 
   const transcriptWebhookURL = 'https://hook.eu2.make.com/ahtfo1phr8gpc6wlfwpvz22pqasicmxn';
 
-useEffect(() => {
-  async function startVAD() {
-    const vad = window?.vad || window;
-    if (!vad?.MicVAD) return;
+  useEffect(() => {
+    async function startVAD() {
+      const vad = window?.vad || window;
+      if (!vad?.MicVAD) return;
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    streamRef.current = stream;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
 
-    const vadInstance = await vad.MicVAD.new({
-      onSpeechStart: () => {
-        if (sessionEndedRef.current) return; // ✅ Prevent recording if session ended
+      const vadInstance = await vad.MicVAD.new({
+        onSpeechStart: () => {
+          if (sessionEndedRef.current) return;
 
-        chunkBufferRef.current = [];
-        setMicActive(true);
+          chunkBufferRef.current = [];
+          setMicActive(true);
 
-        const recorder = new MediaRecorder(stream, {
-          mimeType: 'audio/webm;codecs=opus',
-        });
+          const recorder = new MediaRecorder(stream, {
+            mimeType: 'audio/webm;codecs=opus',
+          });
 
-        recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) chunkBufferRef.current.push(e.data);
-        };
-
-        recorder.onstop = () => {
-          setMicActive(false);
-          const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-          sendToAI(blob);
-        };
-
-        mediaRecorderRef.current = recorder;
-        recorder.start();
-      },
-
-      onSpeechEnd: () => {
-        if (sessionEndedRef.current) return; // ✅ Prevent stopping if already ended
-        setTimeout(() => {
-          if (mediaRecorderRef.current?.state === 'recording') {
-            mediaRecorderRef.current.stop();
-          }
-        }, 500);
-      },
-
-      modelURL: '/vad/silero_vad.onnx',
-      throttleTime: 400,
-      positiveSpeechThreshold: 0.6,
-      negativeSpeechThreshold: 0.2,
-    });
-
-    vadInstanceRef.current = vadInstance;
-    await vadInstance.start();
-
-    timerRef.current = setInterval(() => {
-      setTimer(prev => {
-        if (prev <= 1) {
-          sessionEndedRef.current = true;
-          clearInterval(timerRef.current);
-
-          if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
-            vadInstanceRef.current.stop();
-          }
-
-          if (streamRef.current && streamRef.current.getTracks) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-          }
-
-          const payload = {
-            sessionId,
-            scenarioId,
-            pc_index: pcIndexRef.current,
-            context: discussedIntentsRef.current.join(','),
-            timestamp: new Date().toISOString(),
+          recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) chunkBufferRef.current.push(e.data);
           };
 
-          console.log("📤 Sending transcript trigger:", payload);
-
-          fetch(transcriptWebhookURL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          })
-            .then(() => {
-              console.log("✅ Transcript webhook triggered");
-              navigate(`/stage2?caseId=${scenarioId}`);
-            })
-            .catch((err) => {
-              console.error("❌ Failed to send transcript trigger:", err);
-              navigate(`/stage2?caseId=${scenarioId}`);
-            });
-
-          return 0;
-        }
-
-        return prev - 1;
-      });
-    }, 1000);
-  }
-
-  startVAD();
-
-  return () => {
-    if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
-      vadInstanceRef.current.stop();
-    }
-    streamRef.current?.getTracks().forEach(track => track.stop());
-    clearInterval(timerRef.current);
-  };
-}, [navigate, scenarioId, sessionId]);
-
+          recorder.onstop = () => {
+            setMicActive(false);
+            const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
+            sendToAI(blob);
+          };
 
           mediaRecorderRef.current = recorder;
           recorder.start();
         },
+
         onSpeechEnd: () => {
-          if (sessionEndedRef.current) return; 
+          if (sessionEndedRef.current) return;
           setTimeout(() => {
             if (mediaRecorderRef.current?.state === 'recording') {
               mediaRecorderRef.current.stop();
             }
           }, 500);
         },
+
         modelURL: '/vad/silero_vad.onnx',
         throttleTime: 400,
         positiveSpeechThreshold: 0.6,
@@ -153,10 +75,9 @@ useEffect(() => {
       await vadInstance.start();
 
       timerRef.current = setInterval(() => {
-        setTimer(prev => {
+        setTimer((prev) => {
           if (prev <= 1) {
-            sessionEndedRef.current = true; // ✅ Mark session as ended
-
+            sessionEndedRef.current = true;
             clearInterval(timerRef.current);
 
             if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
@@ -164,7 +85,7 @@ useEffect(() => {
             }
 
             if (streamRef.current && streamRef.current.getTracks) {
-              streamRef.current.getTracks().forEach(track => track.stop());
+              streamRef.current.getTracks().forEach((track) => track.stop());
             }
 
             const payload = {
@@ -193,10 +114,11 @@ useEffect(() => {
 
             return 0;
           }
+
           return prev - 1;
         });
       }, 1000);
-
+    }
 
     startVAD();
 
@@ -204,15 +126,14 @@ useEffect(() => {
       if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
         vadInstanceRef.current.stop();
       }
-      streamRef.current?.getTracks().forEach(track => track.stop());
+      streamRef.current?.getTracks().forEach((track) => track.stop());
       clearInterval(timerRef.current);
     };
   }, [navigate, scenarioId, sessionId]);
 
-
-async function sendToAI(blob) {
-  if (isWaitingRef.current || sessionEndedRef.current) return; // ✅ Prevents send during wait or after session end
-  isWaitingRef.current = true;
+  async function sendToAI(blob) {
+    if (isWaitingRef.current || sessionEndedRef.current) return;
+    isWaitingRef.current = true;
 
     const formData = new FormData();
     formData.append('file', blob, 'question.webm');
@@ -232,7 +153,7 @@ async function sendToAI(blob) {
       const json = await res.json();
       const aiReply = json.reply || '[No reply]';
 
-      setChatLog(prev => [...prev, `🧑‍⚕️ You: (Your question)`, `🦷 Patient: ${aiReply}`]);
+      setChatLog((prev) => [...prev, `🧑‍⚕️ You: (Your question)`, `🦷 Patient: ${aiReply}`]);
       queueAndSpeakReply(aiReply);
 
       if (json.intent && !discussedIntentsRef.current.includes(json.intent)) {
@@ -249,48 +170,34 @@ async function sendToAI(blob) {
 
     } catch (err) {
       console.error("❌ AI error:", err);
-      setChatLog(prev => [...prev, "⚠️ Could not contact AI"]);
+      setChatLog((prev) => [...prev, "⚠️ Could not contact AI"]);
     } finally {
       isWaitingRef.current = false;
     }
   }
-function queueAndSpeakReply(text) {
-  if (sessionEndedRef.current) return; // ✅ Do not queue replies after session ends
-  audioQueueRef.current.push(text);
-  if (!isSpeakingRef.current) playNextInQueue();
-}
 
-function playNextInQueue() {
-  if (sessionEndedRef.current || audioQueueRef.current.length === 0) {
-    isSpeakingRef.current = false;
-    return;
+  function queueAndSpeakReply(text) {
+    if (sessionEndedRef.current) return;
+    audioQueueRef.current.push(text);
+    if (!isSpeakingRef.current) playNextInQueue();
   }
 
-  const text = audioQueueRef.current.shift();
-  isSpeakingRef.current = true;
-
-  fetch('/.netlify/functions/tts', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
-  })
-    .then(res => res.json())
-    .then(data => {
-      const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
-      audio.play().catch(console.warn);
-      audio.onended = () => {
-        isSpeakingRef.current = false;
-        playNextInQueue();
-      };
-    })
-    .catch(err => {
-      console.error("🔊 TTS error:", err);
+  function playNextInQueue() {
+    if (sessionEndedRef.current || audioQueueRef.current.length === 0) {
       isSpeakingRef.current = false;
-    });
-}
+      return;
+    }
 
-      .then(res => res.json())
-      .then(data => {
+    const text = audioQueueRef.current.shift();
+    isSpeakingRef.current = true;
+
+    fetch('/.netlify/functions/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
         const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
         audio.play().catch(console.warn);
         audio.onended = () => {
@@ -298,7 +205,7 @@ function playNextInQueue() {
           playNextInQueue();
         };
       })
-      .catch(err => {
+      .catch((err) => {
         console.error("🔊 TTS error:", err);
         isSpeakingRef.current = false;
       });
