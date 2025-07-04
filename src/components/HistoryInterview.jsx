@@ -171,40 +171,35 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
     if (!isSpeakingRef.current) playNextInQueue();
   }
 
-  function playNextInQueue() {
-    if (audioQueueRef.current.length === 0) {
-      isSpeakingRef.current = false;
-      return;
-    }
-
-    const text = audioQueueRef.current.shift();
-    isSpeakingRef.current = true;
-
-    fetch('/.netlify/functions/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!data.audioContent) {
-          console.error("❌ No audioContent returned from TTS:", data);
-          isSpeakingRef.current = false;
-          return;
-        }
-
-        const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
-        audio.play().catch(console.warn);
-        audio.onended = () => {
-          isSpeakingRef.current = false;
-          playNextInQueue();
-        };
-      })
-      .catch((err) => {
-        console.error("🔊 TTS error:", err);
-        isSpeakingRef.current = false;
-      });
+function playNextInQueue() {
+  if (audioQueueRef.current.length === 0) {
+    isSpeakingRef.current = false;
+    return;
   }
+
+  const text = audioQueueRef.current.shift();
+  isSpeakingRef.current = true;
+
+  fetch('/.netlify/functions/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+    .then(res => res.json())
+    .then(data => {
+      const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
+      audio.play().catch(console.warn);
+      audio.onended = () => {
+        isSpeakingRef.current = false;
+        playNextInQueue();
+      };
+    })
+    .catch(err => {
+      console.error("🔊 TTS error:", err);
+      isSpeakingRef.current = false;
+    });
+}
+
 
   async function generateFeedback() {
     setIsGeneratingFeedback(true);
