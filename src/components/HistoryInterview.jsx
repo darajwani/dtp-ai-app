@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 export default function HistoryInterview({ sessionId, scenarioId }) {
   const [chatLog, setChatLog] = useState([]);
   const [micActive, setMicActive] = useState(false);
-  const [timer, setTimer] = useState(10);
+  const [timer, setTimer] = useState(10); // for quick testing
   const [discussedIntents, setDiscussedIntents] = useState([]);
   const [pcIndex, setPcIndex] = useState(0);
   const [feedback, setFeedback] = useState(null);
@@ -25,6 +25,7 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
 
   const transcriptWebhookURL = 'https://hook.eu2.make.com/ahtfo1phr8gpc6wlfwpvz22pqasicmxn';
   const feedbackTriggerURL = 'https://hook.eu2.make.com/clav842drbatiwo4uyp1jf512r1c3tm4';
+  const feedbackFetchURL = 'https://hook.eu2.make.com/clav842drbatiwo4uyp1jf512r1c3tm4'; // 🔁 update this to your real URL
 
   useEffect(() => {
     async function startVAD() {
@@ -99,19 +100,13 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
               timestamp: new Date().toISOString(),
             };
 
-            console.log("📤 Sending transcript trigger:", payload);
-
             fetch(transcriptWebhookURL, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload),
             })
-              .then(() => {
-                console.log("✅ Transcript webhook triggered");
-              })
-              .catch((err) => {
-                console.error("❌ Failed to send transcript trigger:", err);
-              });
+              .then(() => console.log("✅ Transcript webhook triggered"))
+              .catch((err) => console.error("❌ Transcript trigger failed:", err));
 
             return 0;
           }
@@ -226,13 +221,13 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
       console.log("⏳ Waiting 20s for feedback to be ready...");
       await new Promise((resolve) => setTimeout(resolve, 20000));
 
-      const res = await fetch(`/api/feedback?sessionId=${sessionId}`);
+      const res = await fetch(`${feedbackFetchURL}?sessionId=${sessionId}`);
       const data = await res.json();
 
-      setFeedback(data.feedback || 'No feedback returned.');
+      setFeedback(data); // entire object
     } catch (err) {
       console.error("❌ Feedback fetch failed:", err);
-      setFeedback('Failed to load feedback.');
+      setFeedback({ plain_summary: 'Failed to load feedback.' });
     } finally {
       setIsGeneratingFeedback(false);
     }
@@ -268,8 +263,22 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
 
       {feedback && (
         <div className="mt-4 p-4 border rounded bg-green-50 text-green-800">
-          <h2 className="font-semibold mb-2">📝 Feedback:</h2>
-          <p>{feedback}</p>
+          <h2 className="font-semibold mb-2">📝 Feedback Summary</h2>
+          <p><strong>Grade:</strong> {feedback.grade}</p>
+          <p><strong>Score:</strong> {feedback.score}</p>
+          <p><strong>Summary:</strong> {feedback.summary}</p>
+          <p><strong>Detailed Feedback:</strong> {feedback.feedback}</p>
+          <p><strong>Questions Asked:</strong> {feedback.questions_asked}</p>
+          <p><strong>Questions Missed:</strong> {feedback.questions_missed}</p>
+          <p><strong>Plain Summary:</strong> {feedback.plain_summary}</p>
+
+          <h3 className="mt-2 font-semibold">Rubric Summary:</h3>
+          <ul className="list-disc ml-5">
+            {feedback.rubric_summary &&
+              Object.entries(feedback.rubric_summary).map(([key, value]) => (
+                <li key={key}>{key}: {value}</li>
+              ))}
+          </ul>
         </div>
       )}
     </div>
