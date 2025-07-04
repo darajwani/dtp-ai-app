@@ -23,32 +23,114 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
 
   const transcriptWebhookURL = 'https://hook.eu2.make.com/ahtfo1phr8gpc6wlfwpvz22pqasicmxn';
 
-  useEffect(() => {
-    async function startVAD() {
-      const vad = window?.vad || window;
-      if (!vad?.MicVAD) return;
+useEffect(() => {
+  async function startVAD() {
+    const vad = window?.vad || window;
+    if (!vad?.MicVAD) return;
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    streamRef.current = stream;
 
-      const vadInstance = await vad.MicVAD.new({
-        onSpeechStart: () => {
- if (sessionEndedRef.current) return;
-          chunkBufferRef.current = [];
-          setMicActive(true);
-          const recorder = new MediaRecorder(stream, {
-            mimeType: 'audio/webm;codecs=opus',
-          });
+    const vadInstance = await vad.MicVAD.new({
+      onSpeechStart: () => {
+        if (sessionEndedRef.current) return; // ✅ Prevent recording if session ended
 
-          recorder.ondataavailable = (e) => {
-            if (e.data.size > 0) chunkBufferRef.current.push(e.data);
+        chunkBufferRef.current = [];
+        setMicActive(true);
+
+        const recorder = new MediaRecorder(stream, {
+          mimeType: 'audio/webm;codecs=opus',
+        });
+
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunkBufferRef.current.push(e.data);
+        };
+
+        recorder.onstop = () => {
+          setMicActive(false);
+          const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
+          sendToAI(blob);
+        };
+
+        mediaRecorderRef.current = recorder;
+        recorder.start();
+      },
+
+      onSpeechEnd: () => {
+        if (sessionEndedRef.current) return; // ✅ Prevent stopping if already ended
+        setTimeout(() => {
+          if (mediaRecorderRef.current?.state === 'recording') {
+            mediaRecorderRef.current.stop();
+          }
+        }, 500);
+      },
+
+      modelURL: '/vad/silero_vad.onnx',
+      throttleTime: 400,
+      positiveSpeechThreshold: 0.6,
+      negativeSpeechThreshold: 0.2,
+    });
+
+    vadInstanceRef.current = vadInstance;
+    await vadInstance.start();
+
+    timerRef.current = setInterval(() => {
+      setTimer(prev => {
+        if (prev <= 1) {
+          sessionEndedRef.current = true;
+          clearInterval(timerRef.current);
+
+          if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
+            vadInstanceRef.current.stop();
+          }
+
+          if (streamRef.current && streamRef.current.getTracks) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+          }
+
+          const payload = {
+            sessionId,
+            scenarioId,
+            pc_index: pcIndexRef.current,
+            context: discussedIntentsRef.current.join(','),
+            timestamp: new Date().toISOString(),
           };
 
-          recorder.onstop = () => {
-            setMicActive(false);
-            const blob = new Blob(chunkBufferRef.current, { type: 'audio/webm' });
-            sendToAI(blob);
-          };
+          console.log("📤 Sending transcript trigger:", payload);
+
+          fetch(transcriptWebhookURL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+            .then(() => {
+              console.log("✅ Transcript webhook triggered");
+              navigate(`/stage2?caseId=${scenarioId}`);
+            })
+            .catch((err) => {
+              console.error("❌ Failed to send transcript trigger:", err);
+              navigate(`/stage2?caseId=${scenarioId}`);
+            });
+
+          return 0;
+        }
+
+        return prev - 1;
+      });
+    }, 1000);
+  }
+
+  startVAD();
+
+  return () => {
+    if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
+      vadInstanceRef.current.stop();
+    }
+    streamRef.current?.getTracks().forEach(track => track.stop());
+    clearInterval(timerRef.current);
+  };
+}, [navigate, scenarioId, sessionId]);
+
 
           mediaRecorderRef.current = recorder;
           recorder.start();
