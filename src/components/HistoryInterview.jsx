@@ -7,8 +7,10 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
   const [timer, setTimer] = useState(780);
   const [discussedIntents, setDiscussedIntents] = useState([]);
   const [pcIndex, setPcIndex] = useState(0);
-  const sessionEndedRef = useRef(false);
+  const [feedback, setFeedback] = useState(null);
+  const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
 
+  const sessionEndedRef = useRef(false);
   const streamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const chunkBufferRef = useRef([]);
@@ -22,6 +24,7 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
   const navigate = useNavigate();
 
   const transcriptWebhookURL = 'https://hook.eu2.make.com/ahtfo1phr8gpc6wlfwpvz22pqasicmxn';
+  const feedbackTriggerURL = 'https://hook.eu2.make.com/clav842drbatiwo4uyp1jf512r1c3tm4';
 
   useEffect(() => {
     async function startVAD() {
@@ -105,11 +108,9 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
             })
               .then(() => {
                 console.log("✅ Transcript webhook triggered");
-                navigate(`/stage2?caseId=${scenarioId}`);
               })
               .catch((err) => {
                 console.error("❌ Failed to send transcript trigger:", err);
-                navigate(`/stage2?caseId=${scenarioId}`);
               });
 
             return 0;
@@ -211,6 +212,32 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
       });
   }
 
+  async function generateFeedback() {
+    setIsGeneratingFeedback(true);
+    setFeedback(null);
+
+    try {
+      await fetch(feedbackTriggerURL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, scenarioId }),
+      });
+
+      console.log("⏳ Waiting 20s for feedback to be ready...");
+      await new Promise((resolve) => setTimeout(resolve, 20000));
+
+      const res = await fetch(`/api/feedback?sessionId=${sessionId}`);
+      const data = await res.json();
+
+      setFeedback(data.feedback || 'No feedback returned.');
+    } catch (err) {
+      console.error("❌ Feedback fetch failed:", err);
+      setFeedback('Failed to load feedback.');
+    } finally {
+      setIsGeneratingFeedback(false);
+    }
+  }
+
   const minutes = String(Math.floor(timer / 60)).padStart(2, '0');
   const seconds = String(timer % 60).padStart(2, '0');
 
@@ -218,16 +245,33 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
     <div className="p-6 max-w-xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">🟦 Stage 1 – History Taking</h1>
       <p className="text-gray-500 text-sm mb-2">Time left: ⏱️ {minutes}:{seconds}</p>
+
       <div className="border bg-gray-100 p-4 h-64 overflow-y-auto mb-4 rounded">
         {chatLog.length === 0
           ? <p className="text-gray-400">🎤 Start speaking to begin the patient interview…</p>
           : chatLog.map((line, i) => <div key={i} className="mb-2">{line}</div>)
         }
       </div>
-      <div className="flex items-center space-x-2 text-sm text-gray-600">
+
+      <div className="flex items-center space-x-2 text-sm text-gray-600 mb-4">
         <span>Mic status: {micActive ? '🎙️ Listening...' : 'Idle'}</span>
         <span className={`w-3 h-3 rounded-full ${micActive ? 'bg-red-500 animate-ping' : 'bg-gray-300'}`} />
       </div>
+
+      <button
+        onClick={generateFeedback}
+        disabled={isGeneratingFeedback}
+        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+      >
+        {isGeneratingFeedback ? 'Generating Feedback…' : 'Generate Feedback'}
+      </button>
+
+      {feedback && (
+        <div className="mt-4 p-4 border rounded bg-green-50 text-green-800">
+          <h2 className="font-semibold mb-2">📝 Feedback:</h2>
+          <p>{feedback}</p>
+        </div>
+      )}
     </div>
   );
 }
