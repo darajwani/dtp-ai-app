@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 export default function HistoryInterview({ sessionId, scenarioId }) {
   const [chatLog, setChatLog] = useState([]);
   const [micActive, setMicActive] = useState(false);
-  const [timer, setTimer] = useState(10); // for quick testing
+  const [timer, setTimer] = useState(10); // ⏱️ Adjust for testing
   const [discussedIntents, setDiscussedIntents] = useState([]);
   const [pcIndex, setPcIndex] = useState(0);
   const [feedback, setFeedback] = useState(null);
@@ -25,7 +25,7 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
 
   const transcriptWebhookURL = 'https://hook.eu2.make.com/ahtfo1phr8gpc6wlfwpvz22pqasicmxn';
   const feedbackTriggerURL = 'https://hook.eu2.make.com/clav842drbatiwo4uyp1jf512r1c3tm4';
-  const feedbackFetchURL = 'https://hook.eu2.make.com/clav842drbatiwo4uyp1jf512r1c3tm4'; // 🔁 update this to your real URL
+  const feedbackFetchURL = 'https://hook.eu2.make.com/clav842drbatiwo4uyp1jf512r1c3tm4';
 
   useEffect(() => {
     async function startVAD() {
@@ -84,13 +84,8 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
             sessionEndedRef.current = true;
             clearInterval(timerRef.current);
 
-            if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
-              vadInstanceRef.current.stop();
-            }
-
-            if (streamRef.current && streamRef.current.getTracks) {
-              streamRef.current.getTracks().forEach((track) => track.stop());
-            }
+            if (vadInstanceRef.current?.stop) vadInstanceRef.current.stop();
+            streamRef.current?.getTracks().forEach((track) => track.stop());
 
             const payload = {
               sessionId,
@@ -119,9 +114,7 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
     startVAD();
 
     return () => {
-      if (vadInstanceRef.current && typeof vadInstanceRef.current.stop === 'function') {
-        vadInstanceRef.current.stop();
-      }
+      vadInstanceRef.current?.stop?.();
       streamRef.current?.getTracks().forEach((track) => track.stop());
       clearInterval(timerRef.current);
     };
@@ -179,7 +172,7 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
   }
 
   function playNextInQueue() {
-    if (sessionEndedRef.current || audioQueueRef.current.length === 0) {
+    if (audioQueueRef.current.length === 0) {
       isSpeakingRef.current = false;
       return;
     }
@@ -194,6 +187,12 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
     })
       .then((res) => res.json())
       .then((data) => {
+        if (!data.audioContent) {
+          console.error("❌ No audioContent returned from TTS:", data);
+          isSpeakingRef.current = false;
+          return;
+        }
+
         const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
         audio.play().catch(console.warn);
         audio.onended = () => {
@@ -223,8 +222,7 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
 
       const res = await fetch(`${feedbackFetchURL}?sessionId=${sessionId}`);
       const data = await res.json();
-
-      setFeedback(data); // entire object
+      setFeedback(data);
     } catch (err) {
       console.error("❌ Feedback fetch failed:", err);
       setFeedback({ plain_summary: 'Failed to load feedback.' });
@@ -271,7 +269,6 @@ export default function HistoryInterview({ sessionId, scenarioId }) {
           <p><strong>Questions Asked:</strong> {feedback.questions_asked}</p>
           <p><strong>Questions Missed:</strong> {feedback.questions_missed}</p>
           <p><strong>Plain Summary:</strong> {feedback.plain_summary}</p>
-
           <h3 className="mt-2 font-semibold">Rubric Summary:</h3>
           <ul className="list-disc ml-5">
             {feedback.rubric_summary &&
